@@ -737,11 +737,11 @@ int main(int argc, char** argv) {
 			OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 			return EXIT_FAILURE;
 		}
-		INT cntError = 0;
-		INT cntMinus1 = 0;
-		INT cntMinus2 = 0;
-		INT cnt4 = 0;
-		INT cntMinus3 = 0;
+		INT cntError = -1;
+		INT cntMinus1 = -1;
+		INT cntMinus2 = -1;
+		INT cnt4 = -1;
+		INT cntMinus3 = -1;
 		if (s_startLBA == 0 && s_endLBA == 0) {
 			s_endLBA = roopSize;
 		}
@@ -755,6 +755,13 @@ int main(int argc, char** argv) {
 					continue;
 				}
 				int8_t ret = detect_sector(buf, CD_RAW_SECTOR_SIZE);
+				if (i == 0 && ret != 0) {
+					cntError = 0;
+					cntMinus1 = 0;
+					cntMinus2 = 0;
+					cnt4 = 0;
+					cntMinus3 = 0;
+				}
 				if (ret == 1 || ret == -1 || ret == -2) {
 					fprintf(fpError, "LBA[%06ld, %#07lx], mode 1", i, i);
 					if (ret == 1) {
