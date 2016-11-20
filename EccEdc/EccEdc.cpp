@@ -18,12 +18,15 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-// #include "common.h"
-// #include "banner.h"
 #define _CRT_SECURE_NO_WARNINGS
-#pragma warning(disable:4668 4710 4711 4820)
-#include <stdio.h>
-#include <windows.h>
+#pragma warning(disable: 4061 4668 4710 4711 4820)
+#include <Windows.h>
+
+#include <cstdio>
+#include <cassert>
+
+#include "StringUtils.hpp"
+#include "FileUtils.hpp"
 
 typedef   signed __int8   int8_t;
 typedef unsigned __int8  uint8_t;
@@ -259,118 +262,100 @@ static const uint8_t zeroaddress[4] = { 0, 0, 0, 0 };
 //   2: 2336 mode 2 form 1  predict redundant flags, edc, ecc
 //   3: 2336 mode 2 form 2  predict redundant flags, edc
 //
-static int8_t detect_sector(const uint8_t* sector, size_t size_available) {
-	if (
-		size_available >= 2352 &&
-		sector[0x000] == 0x00 && // sync (12 bytes)
-		sector[0x001] == 0xFF &&
-		sector[0x002] == 0xFF &&
-		sector[0x003] == 0xFF &&
-		sector[0x004] == 0xFF &&
-		sector[0x005] == 0xFF &&
-		sector[0x006] == 0xFF &&
-		sector[0x007] == 0xFF &&
-		sector[0x008] == 0xFF &&
-		sector[0x009] == 0xFF &&
-		sector[0x00A] == 0xFF &&
-		sector[0x00B] == 0x00
-		) {
-		if (
-			sector[0x00F] == 0x01 // mode (1 byte)
-			) {
-			if(
-				sector[0x814] == 0x00 && // reserved (8 bytes)
-				sector[0x815] == 0x00 &&
-				sector[0x816] == 0x00 &&
-				sector[0x817] == 0x00 &&
-				sector[0x818] == 0x00 &&
-				sector[0x819] == 0x00 &&
-				sector[0x81A] == 0x00 &&
-				sector[0x81B] == 0x00
-				) {
-				//
-				// Might be Mode 1
-				//
-				if (
-					ecc_checksector(
-					sector + 0xC,
-					sector + 0x10,
-					sector + 0x81C
-					) &&
-					edc_compute(0, sector, 0x810) == get32lsb(sector + 0x810)
-					) {
-					return 1; // Mode 1
+
+enum SectorType {
+	// Correct
+	SectorTypeNothing = 0,
+	SectorTypeMode1 = 1,
+	SectorTypeMode2Form1 = 2,
+	SectorTypeMode2Form2 = 3,
+	SectorTypeMode2 = 4,
+	// Error
+	SectorTypeMode1BadEcc = -1,
+	SectorTypeMode1ReservedNotZero = -2,
+	SectorTypeMode2FlagsNotSame = -3,
+	SectorTypeNonZeroInvalidSync = -4,
+	SectorTypeZeroSync = -5,
+	SectorTypeUnknownMode = -6,
+};
+
+enum TrackMode {
+	TrackModeUnknown,
+	TrackModeAudio,
+	TrackMode1,
+	TrackMode2,
+};
+
+static SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode *trackMode) {
+	if (size_available >= 2352) {
+		if (sector[0x000] == 0x00 && sector[0x001] == 0xFF && sector[0x002] == 0xFF && sector[0x003] == 0xFF && sector[0x004] == 0xFF && sector[0x005] == 0xFF &&
+			sector[0x006] == 0xFF && sector[0x007] == 0xFF && sector[0x008] == 0xFF && sector[0x009] == 0xFF && sector[0x00A] == 0xFF && sector[0x00B] == 0x00) { // sync (12 bytes)
+			if (sector[0x00F] == 0x01) { // mode (1 byte)
+				if (trackMode) {
+					*trackMode = TrackMode1;
 				}
-				else {
-					return -1; // Mode 1 probably protect(safedisc etc)
+
+				if (sector[0x814] == 0x00 && sector[0x815] == 0x00 && sector[0x816] == 0x00 && sector[0x817] == 0x00 &&
+					sector[0x818] == 0x00 && sector[0x819] == 0x00 && sector[0x81A] == 0x00 && sector[0x81B] == 0x00) { // reserved (8 bytes)
+					//
+					// Might be Mode 1
+					//
+					if (ecc_checksector(sector + 0xC, sector + 0x10, sector + 0x81C) && edc_compute(0, sector, 0x810) == get32lsb(sector + 0x810)) {
+						return SectorTypeMode1; // Mode 1
+					} else {
+						return SectorTypeMode1BadEcc; // Mode 1 probably protect (safedisc etc)
+					}
+				} else {
+					return SectorTypeMode1ReservedNotZero; // Mode 1 but 0x814-81B isn't zero
 				}
-			}
-			else {
-				if (
-					ecc_checksector(
-					sector + 0xC,
-					sector + 0x10,
-					sector + 0x81C
-					) &&
-					edc_compute(0, sector, 0x810) == get32lsb(sector + 0x810)
-					) {
-					return 1; // Mode 1
+			} else if (sector[0x0F] == 0x02) { // mode (1 byte)
+				if (trackMode) {
+					*trackMode = TrackMode2;
 				}
-				return -2; // Mode 1 but 0x814-81B isn't zero
-			}
-		}
-		else if (
-			sector[0x0F] == 0x02 // mode (1 byte)
-			) {
-			if(
-				sector[0x10] == sector[0x14] && // flags (4 bytes)
-				sector[0x11] == sector[0x15] && //   versus redundant copy
-				sector[0x12] == sector[0x16] &&
-				sector[0x13] == sector[0x17]
-				) {
-				//
-				// Might be Mode 2, Form 1 or 2
-				//
-				if (
-					ecc_checksector(
-					zeroaddress,
-					sector + 0x10,
-					sector + 0x10 + 0x80C
-					) &&
-					edc_compute(0, sector + 0x10, 0x808) == get32lsb(sector + 0x10 + 0x808)
-					) {
-					return 2; // Mode 2, Form 1
-				}
-				//
-				// Might be Mode 2, Form 2
-				//
-				if (
-					edc_compute(0, sector + 0x10, 0x91C) == get32lsb(sector + 0x10 + 0x91C)
-					) {
-					return 3; // Mode 2, Form 2
-				}
-				else {
-					return 4; // Mode 2, No EDC (for PlayStation)
+
+				if (sector[0x10] == sector[0x14] && sector[0x11] == sector[0x15] && sector[0x12] == sector[0x16] &&	sector[0x13] == sector[0x17]) {// flags (4 bytes) versus redundant copy
+					//
+					// Might be Mode 2, Form 1 or 2
+					//
+					if (ecc_checksector(zeroaddress, sector + 0x10, sector + 0x10 + 0x80C) && edc_compute(0, sector + 0x10, 0x808) == get32lsb(sector + 0x10 + 0x808)) {
+						return SectorTypeMode2Form1; // Mode 2, Form 1
+					}
+					//
+					// Might be Mode 2, Form 2
+					//
+					if (edc_compute(0, sector + 0x10, 0x91C) == get32lsb(sector + 0x10 + 0x91C)) {
+						return SectorTypeMode2Form2; // Mode 2, Form 2
+					} else {
+						return SectorTypeMode2; // Mode 2, No EDC (for PlayStation)
+					}
+				} else {
+					return SectorTypeMode2FlagsNotSame; // flags aren't same
 				}
 			}
-			else {
-				return -3; // flags isn't same
-			}
+
+			return SectorTypeUnknownMode;
+		} else if (sector[0x000] || sector[0x001] || sector[0x002] || sector[0x003] || sector[0x004] || sector[0x005] || sector[0x006] || sector[0x007] ||
+				sector[0x008] || sector[0x009] || sector[0x00A] || sector[0x00B] || sector[0x00C] || sector[0x00D] || sector[0x00E] || sector[0x00F]) { // Fix for invalid scrambled sector in data track
+			return SectorTypeNonZeroInvalidSync;
+		} else {
+			return SectorTypeZeroSync;
 		}
 	}
+
 	//
 	// Nothing
 	//
-	return 0;
+
+	return SectorTypeNothing;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Reconstruct a sector based on type
 //
-static void reconstruct_sector(
+static bool reconstruct_sector(
 	uint8_t* sector, // must point to a full 2352-byte sector
-	int8_t type
+	SectorType type
 	) {
 	//
 	// Sync
@@ -389,7 +374,7 @@ static void reconstruct_sector(
 	sector[0x00B] = 0x00;
 
 	switch (type) {
-	case 1:
+	case SectorTypeMode1:
 		//
 		// Mode
 		//
@@ -406,8 +391,8 @@ static void reconstruct_sector(
 		sector[0x81A] = 0x00;
 		sector[0x81B] = 0x00;
 		break;
-	case 2:
-	case 3:
+	case SectorTypeMode2Form1:
+	case SectorTypeMode2Form2:
 		//
 		// Mode
 		//
@@ -420,38 +405,46 @@ static void reconstruct_sector(
 		sector[0x012] = sector[0x016];
 		sector[0x013] = sector[0x017];
 		break;
+	default:
+		return false;
 	}
 
 	//
 	// Compute EDC
 	//
 	switch (type) {
-	case 1:
+	case SectorTypeMode1:
 		put32lsb(sector + 0x810, edc_compute(0, sector, 0x810));
 		break;
-	case 2:
+	case SectorTypeMode2Form1:
 		put32lsb(sector + 0x818, edc_compute(0, sector + 0x10, 0x808));
 		break;
-	case 3:
+	case SectorTypeMode2Form2:
 		put32lsb(sector + 0x92C, edc_compute(0, sector + 0x10, 0x91C));
 		break;
+	default:
+		return false;
 	}
 
 	//
 	// Compute ECC
 	//
 	switch (type) {
-	case 1:
+	case SectorTypeMode1:
 		ecc_writesector(sector + 0xC, sector + 0x10, sector + 0x81C);
 		break;
-	case 2:
+	case SectorTypeMode2Form1:
 		ecc_writesector(zeroaddress, sector + 0x10, sector + 0x81C);
 		break;
+	default:
+		return false;
 	}
 
 	//
 	// Done
 	//
+
+	return true;
 }
 
 // above original source is ecm.c in cmdpack-1.03-src.tar.gz
@@ -461,17 +454,18 @@ static void reconstruct_sector(
 
 typedef enum _EXEC_TYPE {
 	check,
+	checkex,
 	fix,
 	write
 } EXEC_TYPE, *PEXEC_TYPE;
 
-static DWORD s_startLBA = 0;
-static DWORD s_endLBA = 0;
-static BYTE s_Minute = 0;
-static BYTE s_Second = 0;
-static BYTE s_Frame = 0;
-static int8_t s_Mode = 0;
-static DWORD s_MaxRoop = 0;
+static DWORD check_fix_mode_s_startLBA = 0;
+static DWORD check_fix_mode_s_endLBA = 0;
+static BYTE write_mode_s_Minute = 0;
+static BYTE write_mode_s_Second = 0;
+static BYTE write_mode_s_Frame = 0;
+static SectorType write_mode_s_Mode = SectorTypeNothing;
+static DWORD write_mode_s_MaxRoop = 0;
 
 #define CD_RAW_SECTOR_SIZE	(2352)
 
@@ -604,6 +598,8 @@ void printUsage(void)
 		"Usage\n"
 		"\tcheck <InFileName>\n"
 		"\t\tValidate user data of 2048 byte per sector\n"
+		"\tcheckex <CueFile>\n"
+		"\t\tValidate user data of 2048 byte per sector (alternate)\n"
 		"\tfix <InOutFileName>\n"
 		"\t\tReplace data of 2336 byte to '0x55' except header\n"
 		"\tfix <InOutFileName> <startLBA> <endLBA>\n"
@@ -616,399 +612,716 @@ void printUsage(void)
 
 int checkArg(int argc, char* argv[], PEXEC_TYPE pExecType)
 {
-	int ret = TRUE;
 	CHAR* endptr = NULL;
+	int ret = TRUE;
+
 	if (argc == 3 && (!strcmp(argv[1], "check"))) {
 		*pExecType = check;
-	}
-	else if (argc == 3 && (!strcmp(argv[1], "fix"))) {
+	} else if (argc == 3 && (!strcmp(argv[1], "checkex"))) {
+		*pExecType = checkex;
+	} else if (argc == 3 && (!strcmp(argv[1], "fix"))) {
 		*pExecType = fix;
-	}
-	else if (argc == 5 && (!strcmp(argv[1], "fix"))) {
-		s_startLBA = strtoul(argv[3], &endptr, 10);
+	} else if (argc == 5 && (!strcmp(argv[1], "fix"))) {
+		check_fix_mode_s_startLBA = strtoul(argv[3], &endptr, 10);
+
 		if (*endptr) {
 			OutputErrorString("Bad arg: %s Please integer\n", endptr);
+
 			return FALSE;
 		}
-		s_endLBA = strtoul(argv[4], &endptr, 10);
+
+		check_fix_mode_s_endLBA = strtoul(argv[4], &endptr, 10);
+
 		if (*endptr) {
 			OutputErrorString("Bad arg: %s Please integer\n", endptr);
+
 			return FALSE;
 		}
+
 		*pExecType = fix;
-	}
-	else if (argc == 8 && (!strcmp(argv[1], "write"))) {
-		s_Minute = (BYTE)strtoul(argv[3], &endptr, 10);
+	} else if (argc == 8 && (!strcmp(argv[1], "write"))) {
+		write_mode_s_Minute = (BYTE)strtoul(argv[3], &endptr, 10);
+
 		if (*endptr) {
 			OutputErrorString("Bad arg: %s Please integer\n", endptr);
+
 			return FALSE;
 		}
-		s_Second = (BYTE)strtoul(argv[4], &endptr, 10);
+
+		write_mode_s_Second = (BYTE)strtoul(argv[4], &endptr, 10);
+
 		if (*endptr) {
 			OutputErrorString("Bad arg: %s Please integer\n", endptr);
+
 			return FALSE;
 		}
-		s_Frame = (BYTE)strtoul(argv[5], &endptr, 10);
+
+		write_mode_s_Frame = (BYTE)strtoul(argv[5], &endptr, 10);
+
 		if (*endptr) {
 			OutputErrorString("Bad arg: %s Please integer\n", endptr);
+
 			return FALSE;
 		}
-		s_Mode = (int8_t)strtoul(argv[6], &endptr, 10);
+
+		write_mode_s_Mode = (SectorType)strtoul(argv[6], &endptr, 10);
 		if (*endptr) {
 			OutputErrorString("Bad arg: %s Please integer\n", endptr);
+
 			return FALSE;
 		}
-		s_MaxRoop = strtoul(argv[7], &endptr, 10);
+
+		write_mode_s_MaxRoop = strtoul(argv[7], &endptr, 10);
+
 		if (*endptr) {
 			OutputErrorString("Bad arg: %s Please integer\n", endptr);
+
 			return FALSE;
 		}
+
 		*pExecType = write;
-	}
-	else {
+	} else {
 		OutputErrorString("argc: %d\n", argc);
+
 		ret = FALSE;
 	}
+
 	return ret;
+}
+
+int fixSectorsFromArray(FILE *fp, DWORD *errorSectors, INT sectorCount, DWORD startLBA, DWORD endLBA) {
+	int fixedCount = 0;
+
+	for (int i = 0; i < sectorCount; i++) {
+		if (startLBA <= errorSectors[i] && errorSectors[i] <= endLBA) {
+			fseek(fp, (LONG)((errorSectors[i] - startLBA) * CD_RAW_SECTOR_SIZE + 12), SEEK_SET);
+
+			BYTE m, s, f;
+			LBAtoMSF((INT)errorSectors[i] + 150, &m, &s, &f);
+
+			fputc(DecToBcd(m), fp);
+			fputc(DecToBcd(s), fp);
+			fputc(DecToBcd(f), fp);
+
+			fseek(fp, 1, SEEK_CUR);
+
+			for (int j = 0; j < 2336; j++) {
+				fputc(0x55, fp);
+			}
+
+			fixedCount++;
+		}
+	}
+
+	return fixedCount;
+}
+
+int handleCheckOrFix(LPCSTR filePath, EXEC_TYPE execType, DWORD startLBA, DWORD endLBA, TrackMode targetTrackMode, LPCSTR errorLogFilePath) {
+	FILE* fp = NULL;
+
+	if (execType == check || execType == checkex) {
+		fp = fopen(filePath, "rb");
+		if (!fp) {
+			OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+
+			return EXIT_FAILURE;
+		}
+	} else if (execType == fix) {
+		fp = fopen(filePath, "rb+");
+		if (!fp) {
+			OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+
+			return EXIT_FAILURE;
+		}
+	}
+
+	FILE *fpError = fopen(errorLogFilePath, "w");
+	if (!fpError) {
+		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+
+		fclose(fp);
+
+		return EXIT_FAILURE;
+	}
+
+	uint8_t buf[CD_RAW_SECTOR_SIZE] = { 0 };
+	DWORD roopSize = GetFileSize(0, fp) / CD_RAW_SECTOR_SIZE;
+
+	DWORD* errorSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	if (!errorSectorNum) {
+		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+
+		return EXIT_FAILURE;
+	}
+
+	DWORD* noMatchLBANum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	if (!noMatchLBANum) {
+		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+
+		return EXIT_FAILURE;
+	}
+
+	DWORD* reservedSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	if (!reservedSectorNum) {
+		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+
+		return EXIT_FAILURE;
+	}
+
+	DWORD* noEDCSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	if (!noEDCSectorNum) {
+		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+
+		return EXIT_FAILURE;
+	}
+
+	DWORD* flagSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	if (!flagSectorNum) {
+		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+
+		return EXIT_FAILURE;
+	}
+
+	DWORD* nonZeroInvalidSyncSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	if (!nonZeroInvalidSyncSectorNum) {
+		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+
+		return EXIT_FAILURE;
+	}
+
+	DWORD* zeroSyncSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	if (!zeroSyncSectorNum) {
+		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+
+		return EXIT_FAILURE;
+	}
+
+	memset(zeroSyncSectorNum, 0xFF, roopSize * sizeof(DWORD));
+
+	DWORD* unknownModeSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	if (!unknownModeSectorNum) {
+		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+
+		return EXIT_FAILURE;
+	}
+
+	INT cnt_SectorFilled55 = 0;
+	INT cnt_SectorTypeMode1BadEcc = 0;
+	INT cnt_SectorTypeMode1ReservedNotZero = 0;
+	INT cnt_SectorTypeMode2FlagsNotSame = 0;
+	INT cnt_SectorTypeMode2 = 0;
+	INT cnt_SectorTypeNonZeroInvalidSync = 0; // For VOB
+	INT cnt_SectorTypeUnknownMode = 0; // For SecuROM
+	
+	if (startLBA == 0 && endLBA == 0) {
+		endLBA = roopSize;
+	}
+
+	BOOL skipTrackModeCheck = targetTrackMode == TrackModeUnknown;
+	TrackMode trackMode = targetTrackMode;
+	
+	for (DWORD j = 0; j < roopSize; j++) {
+		DWORD i = j + startLBA;
+
+		fread(buf, sizeof(uint8_t), sizeof(buf), fp);
+
+		if (!IsScrambledDataHeader(buf)) {
+			if (IsErrorSector(buf)) {
+				fprintf(fpError, "LBA[%06ld, %#07lx], 2336 bytes have been already replaced at 0x55\n", i, i);
+				errorSectorNum[cnt_SectorFilled55++] = i;
+
+				continue;
+			}
+
+			TrackMode trackModeLocal = TrackModeUnknown;
+			SectorType sectorType = detect_sector(buf, CD_RAW_SECTOR_SIZE, &trackModeLocal);
+
+			if (trackMode == TrackModeUnknown && trackModeLocal != TrackModeUnknown) {
+				trackMode = trackModeLocal;
+				skipTrackModeCheck = FALSE;
+			}
+
+			if (sectorType == SectorTypeMode1 || sectorType == SectorTypeMode1BadEcc || sectorType == SectorTypeMode1ReservedNotZero) {
+				fprintf(fpError, "LBA[%06ld, %#07lx], mode 1", i, i);
+
+				if (sectorType == SectorTypeMode1) {
+					fprintf(fpError, "\n");
+				} else if (sectorType == SectorTypeMode1BadEcc) {
+					fprintf(fpError, " User data vs. ecc/edc doesn't match\n");
+
+					noMatchLBANum[cnt_SectorTypeMode1BadEcc++] = i;
+				} else if (sectorType == SectorTypeMode1ReservedNotZero) {
+					if (buf[0x814] == 0x55 && buf[0x815] == 0x55 && buf[0x816] == 0x55 && buf[0x817] == 0x55 &&	buf[0x818] == 0x55 && buf[0x819] == 0x55 && buf[0x81a] == 0x55 && buf[0x81b] == 0x55) {
+						fprintf(fpError, " This sector have been already replaced at 0x55 but it's incompletely\n");
+
+						noMatchLBANum[cnt_SectorTypeMode1BadEcc++] = i;
+					} else {
+						fprintf(fpError,
+							" Reserved byte doesn't zero."
+							" [0x814]:%#04x, [0x815]:%#04x, [0x816]:%#04x, [0x817]:%#04x,"
+							" [0x818]:%#04x, [0x819]:%#04x, [0x81a]:%#04x, [0x81b]:%#04x\n"
+							, buf[0x814], buf[0x815], buf[0x816], buf[0x817]
+							, buf[0x818], buf[0x819], buf[0x81a], buf[0x81b]);
+
+						reservedSectorNum[cnt_SectorTypeMode1ReservedNotZero++] = i;
+					}
+				}
+			} else if (sectorType == SectorTypeMode2Form1 || sectorType == SectorTypeMode2Form2 || sectorType == SectorTypeMode2 || sectorType == SectorTypeMode2FlagsNotSame) {
+				BOOL bNoEdc = FALSE;
+
+				fprintf(fpError, "LBA[%06ld, %#07lx], mode 2 ", i, i);
+
+				if (sectorType == SectorTypeMode2Form1) {
+					fprintf(fpError, "form 1, ");
+				} else if (sectorType == SectorTypeMode2Form2) {
+					fprintf(fpError, "form 2, ");
+				} else if (sectorType == SectorTypeMode2) {
+					fprintf(fpError, "no edc, ");
+
+					noEDCSectorNum[cnt_SectorTypeMode2++] = i;
+					bNoEdc = TRUE;
+				} else if (sectorType == SectorTypeMode2FlagsNotSame) {
+					fprintf(fpError,
+						" Flags arent't the same."
+						" [0x10]:%#04x, [0x11]:%#04x, [0x12]:%#04x, [0x13]:%#04x,"
+						" [0x14]:%#04x, [0x15]:%#04x, [0x16]:%#04x, [0x17]:%#04x, "
+						, buf[0x10], buf[0x11], buf[0x12], buf[0x13]
+						, buf[0x14], buf[0x15], buf[0x16], buf[0x17]);
+
+					flagSectorNum[cnt_SectorTypeMode2FlagsNotSame++] = i;
+				}
+
+				fprintf(fpError, "SubHeader[1](FileNum[%02x]), [2](ChannelNum[%02x]), ", buf[16], buf[17]);
+				fprintf(fpError, "[3](SubMode[%02x]), ", buf[18]);
+
+				if (buf[18] & 0x80) {
+					fprintf(fpError, "End-of-File, ");
+				}
+
+				if (buf[18] & 0x40) {
+					fprintf(fpError, "Real-time block, ");
+				}
+
+				if (buf[18] & 0x20) {
+					fprintf(fpError, "Form 2, ");
+				} else {
+					fprintf(fpError, "Form 1, ");
+
+					if (bNoEdc) {
+						noMatchLBANum[cnt_SectorTypeMode1BadEcc++] = i;
+					}
+				}
+
+				if (buf[18] & 0x10) {
+					fprintf(fpError, "Trigger Block, ");
+				}
+
+				BOOL bAudio = FALSE;
+
+				if (buf[18] & 0x08) {
+					fprintf(fpError, "Data Block, ");
+				} else if (buf[18] & 0x04) {
+					fprintf(fpError, "Audio Block, ");
+					bAudio = TRUE;
+				} else if (buf[18] & 0x02) {
+					fprintf(fpError, "Video Block, ");
+				}
+
+				if (buf[18] & 0x01) {
+					fprintf(fpError, "End-of-Record, ");
+				}
+
+				fprintf(fpError, "[4](CodingInfo[%02x])", buf[19]);
+
+				if (bAudio) {
+					if (buf[19] & 0x80) {
+						fprintf(fpError, "Reserved, ");
+					}
+
+					if (buf[19] & 0x40) {
+						fprintf(fpError, "Emphasis, ");
+					}
+
+					if (buf[19] & 0x20) {
+						fprintf(fpError, "Reserved, ");
+					}
+
+					if (buf[19] & 0x10) {
+						fprintf(fpError, "8 bits/sample, 4 sound sectors, ");
+					} else {
+						fprintf(fpError, "4 bits/sample, 8 sound sectors, ");
+					}
+
+					if (buf[19] & 0x08) {
+						fprintf(fpError, "Reserved, ");
+					}
+
+					if (buf[19] & 0x04) {
+						fprintf(fpError, "18.9kHz, ");
+					} else {
+						fprintf(fpError, "37.8kHz, ");
+					}
+
+					if (buf[19] & 0x02) {
+						fprintf(fpError, "Reserved, ");
+					}
+
+					if (buf[19] & 0x01) {
+						fprintf(fpError, "Stereo, ");
+					} else {
+						fprintf(fpError, "Mono, ");
+					}
+				} else {
+					if (buf[19]) {
+						fprintf(fpError, "Reserved, ");
+					}
+				}
+
+				fprintf(fpError, "\n");
+			} else if (sectorType == SectorTypeNonZeroInvalidSync) {
+				fprintf(fpError, "LBA[%06ld, %#07lx], This sector has invalid sync\n", i, i);
+
+				nonZeroInvalidSyncSectorNum[cnt_SectorTypeNonZeroInvalidSync++] = i;
+			} else if (sectorType == SectorTypeUnknownMode) {
+				fprintf(fpError, "LBA[%06ld, %#07lx], This sector has unknown mode field\n", i, i);
+
+				unknownModeSectorNum[cnt_SectorTypeUnknownMode++] = i;
+			} else if (sectorType == SectorTypeZeroSync) {
+				zeroSyncSectorNum[j] = i;
+			} else if (!skipTrackModeCheck && trackMode != trackModeLocal) {
+				fprintf(fpError, "LBA[%06ld, %#07lx], This sector has changed track mode: %d %d\n", i, i, trackMode, trackModeLocal);
+
+				unknownModeSectorNum[cnt_SectorTypeUnknownMode++] = i;
+			}
+		} else {
+			fprintf(fpError, "LBA[%06ld, %#07lx], This sector is audio or scrambled data or corrupt data\n", i, i);
+		}
+
+		OutputString("\rChecking data sectors (LBA) %6lu/%6lu", i, startLBA + roopSize - 1);
+	}
+
+	INT nonZeroSyncIndexStart = 0;
+	INT nonZeroSyncIndexEnd = roopSize - 1;
+
+	for (INT i = 0; i < roopSize; ++i, ++nonZeroSyncIndexStart) {
+		if (zeroSyncSectorNum[i] == 0xFFFFFFFF)
+			break;
+	}
+
+	for (INT i = roopSize - 1; i >= 0; --i, --nonZeroSyncIndexEnd) {
+		if (zeroSyncSectorNum[i] == 0xFFFFFFFF)
+			break;
+	}
+
+	INT cnt_SectorTypeZeroSync = 0;
+
+	if (nonZeroSyncIndexStart != roopSize - 1) { // Empty track
+		assert(nonZeroSyncIndexStart <= nonZeroSyncIndexEnd);
+		
+		for (int i = nonZeroSyncIndexStart; i <= nonZeroSyncIndexEnd; ++i) {
+			if (zeroSyncSectorNum[i] != 0xFFFFFFFF) {
+				cnt_SectorTypeZeroSync++;
+			}
+		}
+	}
+
+	OutputString("\n");
+
+	if (cnt_SectorFilled55) {
+		OutputString("Number of sector(s) where 2336 byte is all 0x55: %d\n", cnt_SectorFilled55);
+		fprintf(fpError, "[WARNING] Number of sector(s) where 2336 byte is all 0x55: %d\n", cnt_SectorFilled55);
+		fprintf(fpError, "\tSector: ");
+
+		for (int i = 0; i < cnt_SectorFilled55; i++) {
+			fprintf(fpError, "%ld, ", errorSectorNum[i]);
+		}
+
+		fprintf(fpError, "\n");
+	}
+
+	if (cnt_SectorTypeMode1BadEcc) {
+		OutputString("Number of sector(s) where user data doesn't match the expected ECC/EDC: %d\n", cnt_SectorTypeMode1BadEcc);
+		fprintf(fpError, "[ERROR] Number of sector(s) where user data doesn't match the expected ECC/EDC: %d\n", cnt_SectorTypeMode1BadEcc);
+		fprintf(fpError, "\tSector: ");
+
+		for (int i = 0; i < cnt_SectorTypeMode1BadEcc; i++) {
+			fprintf(fpError, "%ld, ", noMatchLBANum[i]);
+		}
+
+		fprintf(fpError, "\n");
+	}
+
+	if (cnt_SectorTypeMode1ReservedNotZero) {
+		OutputString("Number of sector(s) where reserved byte doesn't zero: %d\n", cnt_SectorTypeMode1ReservedNotZero);
+		fprintf(fpError, "[WARNING] Number of sector(s) where reserved byte doesn't zero: %d\n", cnt_SectorTypeMode1ReservedNotZero);
+		fprintf(fpError, "\tSector: ");
+
+		for (int i = 0; i < cnt_SectorTypeMode1ReservedNotZero; i++) {
+			fprintf(fpError, "%ld, ", reservedSectorNum[i]);
+		}
+
+		fprintf(fpError, "\n");
+	}
+
+	if (cnt_SectorTypeMode2) {
+		OutputString("Number of sector(s) where while user data does match the expected ECC/EDC there is no EDC: %d\n", cnt_SectorTypeMode2);
+		fprintf(fpError, "[WARNING] Number of sector(s) where while user data does match the expected ECC/EDC there is no EDC: %d\n", cnt_SectorTypeMode2);
+		fprintf(fpError, "\tSector: ");
+
+		for (int i = 0; i < cnt_SectorTypeMode2; i++) {
+			fprintf(fpError, "%ld, ", noEDCSectorNum[i]);
+		}
+
+		fprintf(fpError, "\n");
+	}
+
+	if (cnt_SectorTypeMode2FlagsNotSame) {
+		OutputString("Number of sector(s) where flag byte doesn't zero: %d\n", cnt_SectorTypeMode2FlagsNotSame);
+		fprintf(fpError, "[WARNING] Number of sector(s) where flag byte doesn't zero: %d\n", cnt_SectorTypeMode2FlagsNotSame);
+		fprintf(fpError, "\tSector: ");
+
+		for (int i = 0; i < cnt_SectorTypeMode2FlagsNotSame; i++) {
+			fprintf(fpError, "%ld, ", flagSectorNum[i]);
+		}
+
+		fprintf(fpError, "\n");
+	}
+
+	if (cnt_SectorTypeNonZeroInvalidSync) {
+		OutputString("Number of sector(s) where sync is invalid: %d\n", cnt_SectorTypeNonZeroInvalidSync);
+		fprintf(fpError, "[ERROR] Number of sector(s) where sync is invalid: %d\n", cnt_SectorTypeNonZeroInvalidSync);
+		fprintf(fpError, "\tSector: ");
+
+		for (int i = 0; i < cnt_SectorTypeNonZeroInvalidSync; i++) {
+			fprintf(fpError, "%ld, ", nonZeroInvalidSyncSectorNum[i]);
+		}
+
+		fprintf(fpError, "\n");
+	}
+
+	if (cnt_SectorTypeZeroSync) {
+		OutputString("Number of sector(s) where sync is zero: %d\n", cnt_SectorTypeZeroSync);
+		fprintf(fpError, "[ERROR] Number of sector(s) where sync is zero: %d\n", cnt_SectorTypeZeroSync);
+		fprintf(fpError, "\tSector: ");
+
+		for (int i = nonZeroSyncIndexStart; i <= nonZeroSyncIndexEnd; ++i) {
+			if (zeroSyncSectorNum[i] != 0xFFFFFFFF) {
+				fprintf(fpError, "%ld, ", zeroSyncSectorNum[i]);
+			}
+		}
+
+		fprintf(fpError, "\n");
+	}
+
+	if (cnt_SectorTypeUnknownMode) {
+		OutputString("Number of sector(s) where mode is unknown: %d\n", cnt_SectorTypeUnknownMode);
+		fprintf(fpError, "[ERROR] Number of sector(s) where mode is unknown: %d\n", cnt_SectorTypeUnknownMode);
+		fprintf(fpError, "\tSector: ");
+
+		for (int i = 0; i < cnt_SectorTypeUnknownMode; i++) {
+			fprintf(fpError, "%ld, ", unknownModeSectorNum[i]);
+		}
+
+		fprintf(fpError, "\n");
+	}
+
+	if (cnt_SectorFilled55 == 0 && cnt_SectorTypeMode1BadEcc == 0 && cnt_SectorTypeMode1ReservedNotZero == 0 && cnt_SectorTypeMode2 == 0 && cnt_SectorTypeMode2FlagsNotSame == 0 &&
+		cnt_SectorTypeNonZeroInvalidSync == 0 && cnt_SectorTypeZeroSync == 0 && cnt_SectorTypeUnknownMode == 0) {
+		OutputString("User data vs. ecc/edc match all\n");
+		fprintf(fpError, "[SUCCESS] User data vs. ecc/edc match all\n");
+	}
+
+	if (execType == fix) {
+		if (cnt_SectorTypeMode1BadEcc || cnt_SectorTypeNonZeroInvalidSync) {
+			int fixedCnt = 0;
+
+			if (cnt_SectorTypeMode1BadEcc) {
+				fixedCnt += fixSectorsFromArray(fp, noMatchLBANum, cnt_SectorTypeMode1BadEcc, startLBA, endLBA);
+			}
+			
+			if (cnt_SectorTypeNonZeroInvalidSync) {
+				fixedCnt += fixSectorsFromArray(fp, nonZeroInvalidSyncSectorNum, cnt_SectorTypeNonZeroInvalidSync, startLBA, endLBA);
+			}
+
+			OutputString("%d unmatch sector is replaced at 0x55 except header\n", fixedCnt);
+			fprintf(fpError, "%d unmatch sector is replaced at 0x55 except header\n", fixedCnt);
+		}
+	}
+	
+	free(unknownModeSectorNum);
+	free(nonZeroInvalidSyncSectorNum);
+	free(zeroSyncSectorNum);
+	free(errorSectorNum);
+	free(noMatchLBANum);
+	free(reservedSectorNum);
+	free(noEDCSectorNum);
+	free(flagSectorNum);
+
+	DWORD fpErrorSize = GetFileSize(0, fpError);
+
+	fclose(fpError);
+	fclose(fp);
+
+	if (!fpErrorSize) {
+		if (remove(errorLogFilePath)) {
+			OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+		}
+	}
+
+	return EXIT_SUCCESS;
+}
+
+int handleCheckEx(LPCSTR filePath) {
+	std::vector<std::string> cueLines;
+
+	if (!FileUtils::readFileLines(filePath, cueLines)) {
+		OutputString("Cannot read cue lines\n");
+
+		return EXIT_FAILURE;
+	}
+
+	struct TrackInfo {
+		std::string trackPath;
+		ULONG lsnStart;
+		ULONG lsnEnd;
+		ULONG trackNo;
+		TrackMode trackMode;
+	};
+
+	std::vector<TrackInfo> tracks;
+	std::string cueDirPath = StringUtils::getDirectoryFromPath(filePath);
+
+	TrackInfo currentTrack = {};
+	ULONG currentTrackNo = 0;
+	ULONG currentLsn = 0;
+
+	for (auto & line : cueLines) {
+		StringUtils::trim(line);
+
+		if (StringUtils::startsWith(line, "FILE") && StringUtils::endsWith(line, "BINARY")) {
+			if (currentTrack.trackPath.size()) {
+				tracks.push_back(currentTrack);
+			} else {
+				currentTrack = {};
+			}
+
+			std::string stripped = line.substr(sizeof("FILE"), line.size() - sizeof("FILE") - sizeof("BINARY"));
+			StringUtils::trim(stripped);
+
+			currentTrack.trackPath = cueDirPath + stripped.substr(1, stripped.size() - 2);
+			currentTrack.trackNo = currentTrackNo++;
+
+			ULONG fileSize = 0;
+
+			if (!FileUtils::getFileSize(currentTrack.trackPath.c_str(), fileSize) || (fileSize % 2352)) {
+				OutputString("Cannot get track size or track size mismatch: %s\n", currentTrack.trackPath.c_str());
+
+				return EXIT_FAILURE;
+			}
+
+			currentTrack.lsnStart = currentLsn;
+			currentTrack.lsnEnd = currentLsn + fileSize / 2352;
+
+			currentLsn = currentTrack.lsnEnd;
+		} else if(StringUtils::startsWith(line, "TRACK")) {
+			if (StringUtils::endsWith(line, "AUDIO")) {
+				currentTrack.trackMode = TrackModeAudio;
+			} else if (StringUtils::endsWith(line, "MODE1/2352")) {
+				currentTrack.trackMode = TrackMode1;
+			} else if (StringUtils::endsWith(line, "MODE2/2352") || StringUtils::endsWith(line, "MODE2/2336")) {
+				currentTrack.trackMode = TrackMode2;
+			} else {
+				OutputString("Invalid track mode: %s\n", line.c_str());
+
+				return EXIT_FAILURE;
+			}
+		}
+	}
+
+	tracks.push_back(currentTrack);
+
+	int retVal = EXIT_FAILURE;
+
+	for (auto & track : tracks) {
+		if (track.trackMode != TrackModeAudio) {
+			char suffixBuffer[24];
+			sprintf(suffixBuffer, "Track_%lu.txt", track.trackNo + 1);
+
+			std::string errorLogFilePath = std::string(filePath) + "_EdcEcc_" + suffixBuffer;
+
+			if ((retVal = handleCheckOrFix(track.trackPath.c_str(), check, track.lsnStart, track.lsnEnd, track.trackMode, errorLogFilePath.c_str())) != EXIT_SUCCESS) {
+				OutputString("Cannot check track: %s\n", track.trackPath.c_str());
+
+				break;
+			}
+		}
+	}
+
+	return retVal;
+}
+
+int handleWrite(LPCSTR filePath) {
+	FILE* fp = fopen(filePath, "ab");
+	if (!fp) {
+		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+
+		return EXIT_FAILURE;
+	}
+
+	for (DWORD i = 0; i < write_mode_s_MaxRoop; i++) {
+		uint8_t buf[CD_RAW_SECTOR_SIZE] = { 0 };
+		buf[0xc] = (uint8_t)(write_mode_s_Minute + 6 * (write_mode_s_Minute / 10));
+		buf[0xd] = (uint8_t)(write_mode_s_Second + 6 * (write_mode_s_Second / 10));
+		buf[0xe] = (uint8_t)(write_mode_s_Frame + 6 * (write_mode_s_Frame / 10));
+
+		if (!reconstruct_sector(buf, write_mode_s_Mode)) {
+			OutputString("Invalid mode specified: %d\n", write_mode_s_Mode);
+		}
+
+		fwrite(buf, sizeof(uint8_t), sizeof(buf), fp);
+
+		write_mode_s_Frame++;
+
+		if (write_mode_s_Frame == 75) {
+			write_mode_s_Frame = 0;
+			write_mode_s_Second++;
+
+			if (write_mode_s_Second == 60) {
+				write_mode_s_Second = 0;
+				write_mode_s_Minute++;
+			}
+		}
+	}
+
+	fclose(fp);
+
+	return EXIT_SUCCESS;
 }
 
 int main(int argc, char** argv) {
 	EXEC_TYPE execType;
+
 	if (!checkArg(argc, argv, &execType)) {
 		printUsage();
+
 		return EXIT_FAILURE;
 	}
-	//
-	// Initialize the ECC/EDC tables
-	//
-	eccedc_init();
+
+	eccedc_init(); // Initialize the ECC/EDC tables
+
+	int retVal = EXIT_FAILURE;
+
+	fprintf(stdout, "FILE: %s\n", argv[2]);
+
 	if (execType == check || execType == fix) {
-		FILE* fp = NULL;
-		if (execType == check) {
-			fp = fopen(argv[2], "rb");
-			if (!fp) {
-				OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
-				return EXIT_FAILURE;
-			}
-		}
-		else if (execType == fix) {
-			fp = fopen(argv[2], "rb+");
-			if (!fp) {
-				OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
-				return EXIT_FAILURE;
-			}
-		}
-		CHAR path[_MAX_PATH] = { 0 };
-		CHAR drive[_MAX_DRIVE] = { 0 };
-		CHAR dir[_MAX_DIR] = { 0 };
-		CHAR fname[_MAX_FNAME] = { 0 };
-		_splitpath(argv[2], drive, dir, fname, NULL);
-		strncat(fname, "_EdcEcc", 7);
-		_makepath(path, drive, dir, fname, ".txt");
-		FILE* fpError = fopen(path, "w");
-		if (!fpError) {
-			OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
-			return EXIT_FAILURE;
-		}
-		uint8_t buf[CD_RAW_SECTOR_SIZE] = { 0 };
-		DWORD roopSize = GetFileSize(0, fp) / CD_RAW_SECTOR_SIZE;
-		DWORD* errorSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
-		if (!errorSectorNum) {
-			OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
-			return EXIT_FAILURE;
-		}
-		DWORD* noMatchLBANum = (DWORD*)calloc(roopSize, sizeof(DWORD));
-		if (!noMatchLBANum) {
-			OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
-			return EXIT_FAILURE;
-		}
-		DWORD* reservedSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
-		if (!reservedSectorNum) {
-			OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
-			return EXIT_FAILURE;
-		}
-		DWORD* noEDCSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
-		if (!noEDCSectorNum) {
-			OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
-			return EXIT_FAILURE;
-		}
-		DWORD* flagSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
-		if (!flagSectorNum) {
-			OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
-			return EXIT_FAILURE;
-		}
-		INT cntError = -1;
-		INT cntMinus1 = -1;
-		INT cntMinus2 = -1;
-		INT cnt4 = -1;
-		INT cntMinus3 = -1;
-		if (s_startLBA == 0 && s_endLBA == 0) {
-			s_endLBA = roopSize;
-		}
-		for (DWORD i = 0; i < roopSize; i++) {
-			fread(buf, sizeof(uint8_t), sizeof(buf), fp);
-			if (!IsScrambledDataHeader(buf)) {
-				if (IsErrorSector(buf)) {
-					fprintf(fpError,
-						"LBA[%06ld, %#07lx], 2336 bytes have been already replaced at 0x55\n", i, i);
-					errorSectorNum[cntError++] = i;
-					continue;
-				}
-				int8_t ret = detect_sector(buf, CD_RAW_SECTOR_SIZE);
-				if (i == 0 && ret != 0) {
-					cntError = 0;
-					cntMinus1 = 0;
-					cntMinus2 = 0;
-					cnt4 = 0;
-					cntMinus3 = 0;
-				}
-				if (ret == 1 || ret == -1 || ret == -2) {
-					fprintf(fpError, "LBA[%06ld, %#07lx], mode 1", i, i);
-					if (ret == 1) {
-						fprintf(fpError, "\n");
-					}
-					else if (ret == -1) {
-						fprintf(fpError, " User data vs. ecc/edc doesn't match\n");
-						noMatchLBANum[cntMinus1++] = i;
-					}
-					else if (ret == -2) {
-						if (buf[0x814] == 0x55 && buf[0x815] == 0x55 && buf[0x816] == 0x55 && buf[0x817] == 0x55 &&
-							buf[0x818] == 0x55 && buf[0x819] == 0x55 && buf[0x81a] == 0x55 && buf[0x81b] == 0x55) {
-							fprintf(fpError,
-								" This sector have been already replaced at 0x55 but it's incompletely\n");
-							noMatchLBANum[cntMinus1++] = i;
-						}
-						else {
-							fprintf(fpError,
-								" Reserved byte doesn't zero."
-								" [0x814]:%#04x, [0x815]:%#04x, [0x816]:%#04x, [0x817]:%#04x,"
-								" [0x818]:%#04x, [0x819]:%#04x, [0x81a]:%#04x, [0x81b]:%#04x\n"
-								, buf[0x814], buf[0x815], buf[0x816], buf[0x817]
-								, buf[0x818], buf[0x819], buf[0x81a], buf[0x81b]);
-							reservedSectorNum[cntMinus2++] = i;
-						}
-					}
-				}
-				else if (ret == 2 || ret == 3 || ret == 4 || ret == -3) {
-					BOOL bNoEdc = FALSE;
-					fprintf(fpError, "LBA[%06ld, %#07lx], mode 2 ", i, i);
-					if (ret == 2) {
-						fprintf(fpError, "form 1, ");
-					}
-					else if (ret == 3) {
-						fprintf(fpError, "form 2, ");
-					}
-					else if (ret == 4) {
-						fprintf(fpError, "no edc, ");
-						noEDCSectorNum[cnt4++] = i;
-						bNoEdc = TRUE;
-					}
-					else if (ret == -3) {
-						fprintf(fpError, 
-							"flags doesn't same."
-							" [0x10]:%#04x, [0x11]:%#04x, [0x12]:%#04x, [0x13]:%#04x,"
-							" [0x14]:%#04x, [0x15]:%#04x, [0x16]:%#04x, [0x17]:%#04x, "
-							, buf[0x10], buf[0x11], buf[0x12], buf[0x13]
-							, buf[0x14], buf[0x15], buf[0x16], buf[0x17]);
-						flagSectorNum[cntMinus3++] = i;
-					}
-					fprintf(fpError,
-						"SubHeader[1](FileNum[%02x]), [2](ChannelNum[%02x]), ",	buf[16], buf[17]);
-					fprintf(fpError, "[3](SubMode[%02x]), ", buf[18]);
-					if (buf[18] & 0x80) {
-						fprintf(fpError, "End-of-File, ");
-					}
-					if (buf[18] & 0x40) {
-						fprintf(fpError, "Real-time block, ");
-					}
-					if (buf[18] & 0x20) {
-						fprintf(fpError, "Form 2, ");
-					}
-					else {
-						fprintf(fpError, "Form 1, ");
-						if (bNoEdc) {
-							noMatchLBANum[cntMinus1++] = i;
-						}
-					}
-					if (buf[18] & 0x10) {
-						fprintf(fpError, "Trigger Block, ");
-					}
-					BOOL bAudio = FALSE;
-					if (buf[18] & 0x08) {
-						fprintf(fpError, "Data Block, ");
-					}
-					else if (buf[18] & 0x04) {
-						fprintf(fpError, "Audio Block, ");
-						bAudio = TRUE;
-					}
-					else if (buf[18] & 0x02) {
-						fprintf(fpError, "Video Block, ");
-					}
-					if (buf[18] & 0x01) {
-						fprintf(fpError, "End-of-Record, ");
-					}
+		std::string errorLogFilePath = std::string(argv[2]) + "_EdcEcc.txt";
 
-					fprintf(fpError, "[4](CodingInfo[%02x])", buf[19]);
-					if (bAudio) {
-						if (buf[19] & 0x80) {
-							fprintf(fpError, "Reserved, ");
-						}
-						if (buf[19] & 0x40) {
-							fprintf(fpError, "Emphasis, ");
-						}
-						if (buf[19] & 0x20) {
-							fprintf(fpError, "Reserved, ");
-						}
-						if (buf[19] & 0x10) {
-							fprintf(fpError, "8 bits/sample, 4 sound sectors, ");
-						}
-						else {
-							fprintf(fpError, "4 bits/sample, 8 sound sectors, ");
-						}
-						if (buf[19] & 0x08) {
-							fprintf(fpError, "Reserved, ");
-						}
-						if (buf[19] & 0x04) {
-							fprintf(fpError, "18.9kHz, ");
-						}
-						else {
-							fprintf(fpError, "37.8kHz, ");
-						}
-						if (buf[19] & 0x02) {
-							fprintf(fpError, "Reserved, ");
-						}
-						if (buf[19] & 0x01) {
-							fprintf(fpError, "Stereo, ");
-						}
-						else {
-							fprintf(fpError, "Mono, ");
-						}
-					}
-					else {
-						if (buf[19]) {
-							fprintf(fpError, "Reserved, ");
-						}
-					}
-					fprintf(fpError, "\n");
-				}
-			}
-			else {
-				fprintf(fpError,
-					"LBA[%06ld, %#07lx], This sector is audio or scrambled data or corrupt data\n", i, i);
-			}
-			OutputString("\rChecking data sectors (LBA) %6lu/%6lu", i, roopSize - 1);
-		}
-		OutputString("\n");
-		if (cntError > 0) {
-			OutputString("Number of sector(s) where 2336 byte is all 0x55: %d\n", cntError);
-			fprintf(fpError, "Number of sector(s) where 2336 byte is all 0x55: %d\n", cntError);
-			fprintf(fpError, "\tSector: ");
-			for (int i = 0; i < cntError; i++) {
-				fprintf(fpError, "%ld, ", errorSectorNum[i]);
-			}
-			fprintf(fpError, "\n");
-		}
-		if (cntMinus1 > 0) {
-			OutputString("Number of sector(s) where user data doesn't match the expected ECC/EDC: %d\n", cntMinus1);
-			fprintf(fpError, "Number of sector(s) where user data doesn't match the expected ECC/EDC: %d\n", cntMinus1);
-			fprintf(fpError, "\tSector: ");
-			for (int i = 0; i < cntMinus1; i++) {
-				fprintf(fpError, "%ld, ", noMatchLBANum[i]);
-			}
-			fprintf(fpError, "\n");
-		}
-		if (cntMinus2 > 0) {
-			OutputString("Number of sector(s) where reserved byte doesn't zero: %d\n", cntMinus2);
-			fprintf(fpError, "Number of sector(s) where reserved byte doesn't zero: %d\n", cntMinus2);
-			fprintf(fpError, "\tSector: ");
-			for (int i = 0; i < cntMinus2; i++) {
-				fprintf(fpError, "%ld, ", reservedSectorNum[i]);
-			}
-			fprintf(fpError, "\n");
-		}
-		if (cnt4 > 0) {
-			OutputString("Number of sector(s) where while user data does match the expected ECC/EDC there is no EDC: %d\n", cnt4);
-			fprintf(fpError, "Number of sector(s) where while user data does match the expected ECC/EDC there is no EDC: %d\n", cnt4);
-			fprintf(fpError, "\tSector: ");
-			for (int i = 0; i < cnt4; i++) {
-				fprintf(fpError, "%ld, ", noEDCSectorNum[i]);
-			}
-			fprintf(fpError, "\n");
-		}
-		if (cntMinus3 > 0) {
-			OutputString("Number of sector(s) where flag byte doesn't zero: %d\n", cntMinus3);
-			fprintf(fpError, "Number of sector(s) where flag byte doesn't zero: %d\n", cntMinus3);
-			fprintf(fpError, "\tSector: ");
-			for (int i = 0; i < cntMinus3; i++) {
-				fprintf(fpError, "%ld, ", flagSectorNum[i]);
-			}
-			fprintf(fpError, "\n");
-		}
-		if (cntError == 0 && cntMinus1 == 0 && cntMinus2 == 0 && cnt4 == 0 && cntMinus3 == 0) {
-			OutputString("User data vs. ecc/edc match all\n");
-			fprintf(fpError, "User data vs. ecc/edc match all\n");
-		}
-		if (execType == fix) {
-			if (cntMinus1 > 0) {
-				int fixedCnt = 0;
-				for (int i = 0; i < cntMinus1; i++) {
-					if (s_startLBA <= noMatchLBANum[i] && noMatchLBANum[i] <= s_endLBA) {
-						fseek(fp, (LONG)(noMatchLBANum[i] * CD_RAW_SECTOR_SIZE + 12), SEEK_SET);
-						BYTE m, s, f;
-						LBAtoMSF((INT)noMatchLBANum[i] + 150, &m, &s, &f);
-						fputc(DecToBcd(m), fp);
-						fputc(DecToBcd(s), fp);
-						fputc(DecToBcd(f), fp);
-						fseek(fp, 1, SEEK_CUR);
-						for (int j = 0; j < 2336; j++) {
-							fputc(0x55, fp);
-						}
-						fixedCnt++;
-					}
-				}
-				OutputString("%d unmatch sector is replaced at 0x55 except header\n", fixedCnt);
-				fprintf(fpError, "%d unmatch sector is replaced at 0x55 except header\n", fixedCnt);
-			}
-		}
-		DWORD fsize = GetFileSize(0, fpError);
-		fclose(fp);
-		fclose(fpError);
-		free(errorSectorNum);
-		free(noMatchLBANum);
-		free(reservedSectorNum);
-		free(noEDCSectorNum);
-		free(flagSectorNum);
-		if (!fsize) {
-			if (remove(path)) {
-				OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
-			}
-		}
-	}
-	else if (execType == write) {
-		FILE* fp = fopen(argv[2], "ab");
-		if (!fp) {
-			OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
-			return EXIT_FAILURE;
-		}
-		for (DWORD i = 0; i < s_MaxRoop; i++) {
-			uint8_t buf[CD_RAW_SECTOR_SIZE] = { 0 };
-			buf[0xc] = (uint8_t)(s_Minute + 6 * (s_Minute / 10));
-			buf[0xd] = (uint8_t)(s_Second + 6 * (s_Second / 10));
-			buf[0xe] = (uint8_t)(s_Frame + 6 * (s_Frame / 10));
-			reconstruct_sector(buf, s_Mode);
-			fwrite(buf, sizeof(uint8_t), sizeof(buf), fp);
-			s_Frame++;
-			if (s_Frame == 75) {
-				s_Frame = 0;
-				s_Second++;
-				if (s_Second == 60) {
-					s_Second = 0;
-					s_Minute++;
-				}
-			}
-		}
-		fclose(fp);
+		retVal = handleCheckOrFix(argv[2], execType, check_fix_mode_s_startLBA, check_fix_mode_s_endLBA, TrackModeUnknown, errorLogFilePath.c_str());
+	} else if (execType == checkex) {
+		retVal = handleCheckEx(argv[2]);
+	} else if (execType == write) {
+		retVal = handleWrite(argv[2]);
 	}
 
-	return EXIT_SUCCESS;
+	return retVal;
 }
