@@ -26,6 +26,12 @@
  Use this tool at own your risk.
  Trouble in regard to the use of this tool, I can not guarantee any.
 
+* Bug report
+ To: http://forum.redump.org/topic/10483/discimagecreator/
+
+* Gratitude
+ Thank's redump.org users.
+
 ==================================Change Log===================================
 *2014-04-11
 http://www.mediafire.com/?glwmoytaqo00e55/
@@ -58,4 +64,10 @@ fixed: some message
 updated: Visual Studio 2015 Update 2
 
 *2016-08-05
+updated: Visual Studio 2015 Update 3
 fixed: the init value of error count
+
+*2017-03-30
+merged: the code of branch
+refactoring: splitted the src, removed and disabled build warning
+added: some messages

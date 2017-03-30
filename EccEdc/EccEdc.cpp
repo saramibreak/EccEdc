@@ -1,8 +1,5 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// #define TITLE "ecm - Encoder/decoder for Error Code Modeler format"
-// #define COPYR "Copyright (C) 2002-2011 Neill Corlett"
-//
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
@@ -18,446 +15,10 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#define _CRT_SECURE_NO_WARNINGS
-#pragma warning(disable: 4061 4668 4710 4711 4820)
-#include <Windows.h>
-
-#include <cstdio>
-#include <cassert>
-
 #include "StringUtils.hpp"
 #include "FileUtils.hpp"
-
-typedef   signed __int8   int8_t;
-typedef unsigned __int8  uint8_t;
-typedef   signed __int16  int16_t;
-typedef unsigned __int16 uint16_t;
-typedef   signed __int32  int32_t;
-typedef unsigned __int32 uint32_t;
-
-////////////////////////////////////////////////////////////////////////////////
-//
-// Sector types
-//
-// Mode 1
-// -----------------------------------------------------
-//        0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-// 0000h 00 FF FF FF FF FF FF FF FF FF FF 00 [-ADDR-] 01
-// 0010h [---DATA...
-// ...
-// 0800h                                     ...DATA---]
-// 0810h [---EDC---] 00 00 00 00 00 00 00 00 [---ECC...
-// ...
-// 0920h                                      ...ECC---]
-// -----------------------------------------------------
-//
-// Mode 2 (XA), form 1
-// -----------------------------------------------------
-//        0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-// 0000h 00 FF FF FF FF FF FF FF FF FF FF 00 [-ADDR-] 02
-// 0010h [--FLAGS--] [--FLAGS--] [---DATA...
-// ...
-// 0810h             ...DATA---] [---EDC---] [---ECC...
-// ...
-// 0920h                                      ...ECC---]
-// -----------------------------------------------------
-//
-// Mode 2 (XA), form 2
-// -----------------------------------------------------
-//        0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-// 0000h 00 FF FF FF FF FF FF FF FF FF FF 00 [-ADDR-] 02
-// 0010h [--FLAGS--] [--FLAGS--] [---DATA...
-// ...
-// 0920h                         ...DATA---] [---EDC---]
-// -----------------------------------------------------
-//
-// ADDR:  Sector address, encoded as minutes:seconds:frames in BCD
-// FLAGS: Used in Mode 2 (XA) sectors describing the type of sector; repeated
-//        twice for redundancy
-// DATA:  Area of the sector which contains the actual data itself
-// EDC:   Error Detection Code
-// ECC:   Error Correction Code
-//
-
-////////////////////////////////////////////////////////////////////////////////
-
-static uint32_t get32lsb(const uint8_t* src) {
-	return
-		(((uint32_t)(src[0])) << 0) |
-		(((uint32_t)(src[1])) << 8) |
-		(((uint32_t)(src[2])) << 16) |
-		(((uint32_t)(src[3])) << 24);
-}
-
-static void put32lsb(uint8_t* dest, uint32_t value) {
-	dest[0] = (uint8_t)(value);
-	dest[1] = (uint8_t)(value >> 8);
-	dest[2] = (uint8_t)(value >> 16);
-	dest[3] = (uint8_t)(value >> 24);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//
-// LUTs used for computing ECC/EDC
-//
-static uint8_t  ecc_f_lut[256];
-static uint8_t  ecc_b_lut[256];
-static uint32_t edc_lut[256];
-
-static void eccedc_init(void) {
-	size_t i;
-	for (i = 0; i < 256; i++) {
-		uint32_t edc = i;
-		size_t j = (i << 1) ^ (i & 0x80 ? 0x11D : 0);
-		ecc_f_lut[i] = j;
-		ecc_b_lut[i ^ j] = i;
-		for (j = 0; j < 8; j++) {
-			edc = (edc >> 1) ^ (edc & 1 ? 0xD8018001 : 0);
-		}
-		edc_lut[i] = edc;
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//
-// Compute EDC for a block
-//
-static uint32_t edc_compute(
-	uint32_t edc,
-	const uint8_t* src,
-	size_t size
-	) {
-	for (; size; size--) {
-		edc = (edc >> 8) ^ edc_lut[(edc ^ (*src++)) & 0xFF];
-	}
-	return edc;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//
-// Check ECC block (either P or Q)
-// Returns true if the ECC data is an exact match
-//
-static int8_t ecc_checkpq(
-	const uint8_t* address,
-	const uint8_t* data,
-	size_t major_count,
-	size_t minor_count,
-	size_t major_mult,
-	size_t minor_inc,
-	const uint8_t* ecc
-	) {
-	size_t size = major_count * minor_count;
-	size_t major;
-	for (major = 0; major < major_count; major++) {
-		size_t index = (major >> 1) * major_mult + (major & 1);
-		uint8_t ecc_a = 0;
-		uint8_t ecc_b = 0;
-		size_t minor;
-		for (minor = 0; minor < minor_count; minor++) {
-			uint8_t temp;
-			if (index < 4) {
-				temp = address[index];
-			}
-			else {
-				temp = data[index - 4];
-			}
-			index += minor_inc;
-			if (index >= size) {
-				index -= size;
-			}
-			ecc_a ^= temp;
-			ecc_b ^= temp;
-			ecc_a = ecc_f_lut[ecc_a];
-		}
-		ecc_a = ecc_b_lut[ecc_f_lut[ecc_a] ^ ecc_b];
-		if (
-			ecc[major] != (ecc_a) ||
-			ecc[major + major_count] != (ecc_a ^ ecc_b)
-			) {
-			return 0;
-		}
-	}
-	return 1;
-}
-
-//
-// Write ECC block (either P or Q)
-//
-static void ecc_writepq(
-	const uint8_t* address,
-	const uint8_t* data,
-	size_t major_count,
-	size_t minor_count,
-	size_t major_mult,
-	size_t minor_inc,
-	uint8_t* ecc
-	) {
-	size_t size = major_count * minor_count;
-	size_t major;
-	for (major = 0; major < major_count; major++) {
-		size_t index = (major >> 1) * major_mult + (major & 1);
-		uint8_t ecc_a = 0;
-		uint8_t ecc_b = 0;
-		size_t minor;
-		for (minor = 0; minor < minor_count; minor++) {
-			uint8_t temp;
-			if (index < 4) {
-				temp = address[index];
-			}
-			else {
-				temp = data[index - 4];
-			}
-			index += minor_inc;
-			if (index >= size) {
-				index -= size;
-			}
-			ecc_a ^= temp;
-			ecc_b ^= temp;
-			ecc_a = ecc_f_lut[ecc_a];
-		}
-		ecc_a = ecc_b_lut[ecc_f_lut[ecc_a] ^ ecc_b];
-		ecc[major] = (ecc_a);
-		ecc[major + major_count] = (ecc_a ^ ecc_b);
-	}
-}
-
-//
-// Check ECC P and Q codes for a sector
-// Returns true if the ECC data is an exact match
-//
-static int8_t ecc_checksector(
-	const uint8_t *address,
-	const uint8_t *data,
-	const uint8_t *ecc
-	) {
-	return
-		ecc_checkpq(address, data, 86, 24, 2, 86, ecc) &&      // P
-		ecc_checkpq(address, data, 52, 43, 86, 88, ecc + 0xAC); // Q
-}
-
-//
-// Write ECC P and Q codes for a sector
-//
-static void ecc_writesector(
-	const uint8_t *address,
-	const uint8_t *data,
-	uint8_t *ecc
-	) {
-	ecc_writepq(address, data, 86, 24, 2, 86, ecc);        // P
-	ecc_writepq(address, data, 52, 43, 86, 88, ecc + 0xAC); // Q
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-static const uint8_t zeroaddress[4] = { 0, 0, 0, 0 };
-
-////////////////////////////////////////////////////////////////////////////////
-//
-// Check if this is a sector we can compress
-//
-// Sector types:
-//   0: Literal bytes (not a sector)
-//   1: 2352 mode 1         predict sync, mode, reserved, edc, ecc
-//   2: 2336 mode 2 form 1  predict redundant flags, edc, ecc
-//   3: 2336 mode 2 form 2  predict redundant flags, edc
-//
-
-enum SectorType {
-	// Correct
-	SectorTypeNothing = 0,
-	SectorTypeMode1 = 1,
-	SectorTypeMode2Form1 = 2,
-	SectorTypeMode2Form2 = 3,
-	SectorTypeMode2 = 4,
-	// Error
-	SectorTypeMode1BadEcc = -1,
-	SectorTypeMode1ReservedNotZero = -2,
-	SectorTypeMode2FlagsNotSame = -3,
-	SectorTypeNonZeroInvalidSync = -4,
-	SectorTypeZeroSync = -5,
-	SectorTypeUnknownMode = -6,
-};
-
-enum TrackMode {
-	TrackModeUnknown,
-	TrackModeAudio,
-	TrackMode1,
-	TrackMode2,
-};
-
-static SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode *trackMode) {
-	if (size_available >= 2352) {
-		if (sector[0x000] == 0x00 && sector[0x001] == 0xFF && sector[0x002] == 0xFF && sector[0x003] == 0xFF && sector[0x004] == 0xFF && sector[0x005] == 0xFF &&
-			sector[0x006] == 0xFF && sector[0x007] == 0xFF && sector[0x008] == 0xFF && sector[0x009] == 0xFF && sector[0x00A] == 0xFF && sector[0x00B] == 0x00) { // sync (12 bytes)
-			if (sector[0x00F] == 0x01) { // mode (1 byte)
-				if (trackMode) {
-					*trackMode = TrackMode1;
-				}
-
-				if (sector[0x814] == 0x00 && sector[0x815] == 0x00 && sector[0x816] == 0x00 && sector[0x817] == 0x00 &&
-					sector[0x818] == 0x00 && sector[0x819] == 0x00 && sector[0x81A] == 0x00 && sector[0x81B] == 0x00) { // reserved (8 bytes)
-					//
-					// Might be Mode 1
-					//
-					if (ecc_checksector(sector + 0xC, sector + 0x10, sector + 0x81C) && edc_compute(0, sector, 0x810) == get32lsb(sector + 0x810)) {
-						return SectorTypeMode1; // Mode 1
-					} else {
-						return SectorTypeMode1BadEcc; // Mode 1 probably protect (safedisc etc)
-					}
-				} else {
-					return SectorTypeMode1ReservedNotZero; // Mode 1 but 0x814-81B isn't zero
-				}
-			} else if (sector[0x0F] == 0x02) { // mode (1 byte)
-				if (trackMode) {
-					*trackMode = TrackMode2;
-				}
-
-				if (sector[0x10] == sector[0x14] && sector[0x11] == sector[0x15] && sector[0x12] == sector[0x16] &&	sector[0x13] == sector[0x17]) {// flags (4 bytes) versus redundant copy
-					//
-					// Might be Mode 2, Form 1 or 2
-					//
-					if (ecc_checksector(zeroaddress, sector + 0x10, sector + 0x10 + 0x80C) && edc_compute(0, sector + 0x10, 0x808) == get32lsb(sector + 0x10 + 0x808)) {
-						return SectorTypeMode2Form1; // Mode 2, Form 1
-					}
-					//
-					// Might be Mode 2, Form 2
-					//
-					if (edc_compute(0, sector + 0x10, 0x91C) == get32lsb(sector + 0x10 + 0x91C)) {
-						return SectorTypeMode2Form2; // Mode 2, Form 2
-					} else {
-						return SectorTypeMode2; // Mode 2, No EDC (for PlayStation)
-					}
-				} else {
-					return SectorTypeMode2FlagsNotSame; // flags aren't same
-				}
-			}
-
-			return SectorTypeUnknownMode;
-		} else if (sector[0x000] || sector[0x001] || sector[0x002] || sector[0x003] || sector[0x004] || sector[0x005] || sector[0x006] || sector[0x007] ||
-				sector[0x008] || sector[0x009] || sector[0x00A] || sector[0x00B] || sector[0x00C] || sector[0x00D] || sector[0x00E] || sector[0x00F]) { // Fix for invalid scrambled sector in data track
-			return SectorTypeNonZeroInvalidSync;
-		} else {
-			return SectorTypeZeroSync;
-		}
-	}
-
-	//
-	// Nothing
-	//
-
-	return SectorTypeNothing;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//
-// Reconstruct a sector based on type
-//
-static bool reconstruct_sector(
-	uint8_t* sector, // must point to a full 2352-byte sector
-	SectorType type
-	) {
-	//
-	// Sync
-	//
-	sector[0x000] = 0x00;
-	sector[0x001] = 0xFF;
-	sector[0x002] = 0xFF;
-	sector[0x003] = 0xFF;
-	sector[0x004] = 0xFF;
-	sector[0x005] = 0xFF;
-	sector[0x006] = 0xFF;
-	sector[0x007] = 0xFF;
-	sector[0x008] = 0xFF;
-	sector[0x009] = 0xFF;
-	sector[0x00A] = 0xFF;
-	sector[0x00B] = 0x00;
-
-	switch (type) {
-	case SectorTypeMode1:
-		//
-		// Mode
-		//
-		sector[0x00F] = 0x01;
-		//
-		// Reserved
-		//
-		sector[0x814] = 0x00;
-		sector[0x815] = 0x00;
-		sector[0x816] = 0x00;
-		sector[0x817] = 0x00;
-		sector[0x818] = 0x00;
-		sector[0x819] = 0x00;
-		sector[0x81A] = 0x00;
-		sector[0x81B] = 0x00;
-		break;
-	case SectorTypeMode2Form1:
-	case SectorTypeMode2Form2:
-		//
-		// Mode
-		//
-		sector[0x00F] = 0x02;
-		//
-		// Flags
-		//
-		sector[0x010] = sector[0x014];
-		sector[0x011] = sector[0x015];
-		sector[0x012] = sector[0x016];
-		sector[0x013] = sector[0x017];
-		break;
-	default:
-		return false;
-	}
-
-	//
-	// Compute EDC
-	//
-	switch (type) {
-	case SectorTypeMode1:
-		put32lsb(sector + 0x810, edc_compute(0, sector, 0x810));
-		break;
-	case SectorTypeMode2Form1:
-		put32lsb(sector + 0x818, edc_compute(0, sector + 0x10, 0x808));
-		break;
-	case SectorTypeMode2Form2:
-		put32lsb(sector + 0x92C, edc_compute(0, sector + 0x10, 0x91C));
-		break;
-	default:
-		return false;
-	}
-
-	//
-	// Compute ECC
-	//
-	switch (type) {
-	case SectorTypeMode1:
-		ecc_writesector(sector + 0xC, sector + 0x10, sector + 0x81C);
-		break;
-	case SectorTypeMode2Form1:
-		ecc_writesector(zeroaddress, sector + 0x10, sector + 0x81C);
-		break;
-	default:
-		return false;
-	}
-
-	//
-	// Done
-	//
-
-	return true;
-}
-
-// above original source is ecm.c in cmdpack-1.03-src.tar.gz
-//  Copyright (C) 1996-2011 Neill Corlett
-//  http://www.neillcorlett.com/cmdpack/
-////////////////////////////////////////////////////////////////////////////////
-
-typedef enum _EXEC_TYPE {
-	check,
-	checkex,
-	fix,
-	write
-} EXEC_TYPE, *PEXEC_TYPE;
+#include "Enum.h"
+#include "_external/ecm.h"
 
 static DWORD check_fix_mode_s_startLBA = 0;
 static DWORD check_fix_mode_s_endLBA = 0;
@@ -553,18 +114,18 @@ BOOL IsErrorSector(
 	return bRet;
 }
 
-DWORD GetFileSize(
+LONG GetFileSize(
 	LONG lOffset,
 	FILE *fp
 	)
 {
-	DWORD dwFileSize = 0;
+	LONG lFileSize = 0;
 	if (fp != NULL) {
 		fseek(fp, 0, SEEK_END);
-		dwFileSize = (DWORD)ftell(fp);
+		lFileSize = ftell(fp);
 		fseek(fp, lOffset, SEEK_SET);
 	}
-	return dwFileSize;
+	return lFileSize;
 }
 
 VOID LBAtoMSF(
@@ -694,7 +255,8 @@ int fixSectorsFromArray(FILE *fp, DWORD *errorSectors, INT sectorCount, DWORD st
 
 	for (int i = 0; i < sectorCount; i++) {
 		if (startLBA <= errorSectors[i] && errorSectors[i] <= endLBA) {
-			fseek(fp, (LONG)((errorSectors[i] - startLBA) * CD_RAW_SECTOR_SIZE + 12), SEEK_SET);
+//			fseek(fp, (LONG)((errorSectors[i] - startLBA) * CD_RAW_SECTOR_SIZE + 12), SEEK_SET);
+			fseek(fp, (LONG)(errorSectors[i] * CD_RAW_SECTOR_SIZE + 12), SEEK_SET);
 
 			BYTE m, s, f;
 			LBAtoMSF((INT)errorSectors[i] + 150, &m, &s, &f);
@@ -733,6 +295,8 @@ int handleCheckOrFix(LPCSTR filePath, EXEC_TYPE execType, DWORD startLBA, DWORD 
 
 			return EXIT_FAILURE;
 		}
+	} else {
+		return EXIT_FAILURE;
 	}
 
 	FILE *fpError = fopen(errorLogFilePath, "w");
@@ -745,51 +309,51 @@ int handleCheckOrFix(LPCSTR filePath, EXEC_TYPE execType, DWORD startLBA, DWORD 
 	}
 
 	uint8_t buf[CD_RAW_SECTOR_SIZE] = { 0 };
-	DWORD roopSize = GetFileSize(0, fp) / CD_RAW_SECTOR_SIZE;
+	INT roopSize = GetFileSize(0, fp) / CD_RAW_SECTOR_SIZE;
 
-	DWORD* errorSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	DWORD* errorSectorNum = (DWORD*)calloc((size_t)roopSize, sizeof(DWORD));
 	if (!errorSectorNum) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 
 		return EXIT_FAILURE;
 	}
 
-	DWORD* noMatchLBANum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	DWORD* noMatchLBANum = (DWORD*)calloc((size_t)roopSize, sizeof(DWORD));
 	if (!noMatchLBANum) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 
 		return EXIT_FAILURE;
 	}
 
-	DWORD* reservedSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	DWORD* reservedSectorNum = (DWORD*)calloc((size_t)roopSize, sizeof(DWORD));
 	if (!reservedSectorNum) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 
 		return EXIT_FAILURE;
 	}
 
-	DWORD* noEDCSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	DWORD* noEDCSectorNum = (DWORD*)calloc((size_t)roopSize, sizeof(DWORD));
 	if (!noEDCSectorNum) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 
 		return EXIT_FAILURE;
 	}
 
-	DWORD* flagSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	DWORD* flagSectorNum = (DWORD*)calloc((size_t)roopSize, sizeof(DWORD));
 	if (!flagSectorNum) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 
 		return EXIT_FAILURE;
 	}
 
-	DWORD* nonZeroInvalidSyncSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	DWORD* nonZeroInvalidSyncSectorNum = (DWORD*)calloc((size_t)roopSize, sizeof(DWORD));
 	if (!nonZeroInvalidSyncSectorNum) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 
 		return EXIT_FAILURE;
 	}
 
-	DWORD* zeroSyncSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	DWORD* zeroSyncSectorNum = (DWORD*)calloc((size_t)roopSize, sizeof(DWORD));
 	if (!zeroSyncSectorNum) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 
@@ -798,7 +362,7 @@ int handleCheckOrFix(LPCSTR filePath, EXEC_TYPE execType, DWORD startLBA, DWORD 
 
 	memset(zeroSyncSectorNum, 0xFF, roopSize * sizeof(DWORD));
 
-	DWORD* unknownModeSectorNum = (DWORD*)calloc(roopSize, sizeof(DWORD));
+	DWORD* unknownModeSectorNum = (DWORD*)calloc((size_t)roopSize, sizeof(DWORD));
 	if (!unknownModeSectorNum) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 
@@ -814,15 +378,15 @@ int handleCheckOrFix(LPCSTR filePath, EXEC_TYPE execType, DWORD startLBA, DWORD 
 	INT cnt_SectorTypeUnknownMode = 0; // For SecuROM
 	
 	if (startLBA == 0 && endLBA == 0) {
-		endLBA = roopSize;
+		endLBA = (DWORD)roopSize;
 	}
 
 	BOOL skipTrackModeCheck = targetTrackMode == TrackModeUnknown;
 	TrackMode trackMode = targetTrackMode;
 	
-	for (DWORD j = 0; j < roopSize; j++) {
-		DWORD i = j + startLBA;
-
+//	for (DWORD j = 0; j < (DWORD)roopSize; j++) {
+//		DWORD i = j + startLBA;
+	for (DWORD i = 0; i < (DWORD)roopSize; i++) {
 		fread(buf, sizeof(uint8_t), sizeof(buf), fp);
 
 		if (!IsScrambledDataHeader(buf)) {
@@ -987,7 +551,9 @@ int handleCheckOrFix(LPCSTR filePath, EXEC_TYPE execType, DWORD startLBA, DWORD 
 
 				unknownModeSectorNum[cnt_SectorTypeUnknownMode++] = i;
 			} else if (sectorType == SectorTypeZeroSync) {
-				zeroSyncSectorNum[j] = i;
+//				zeroSyncSectorNum[j] = i;
+				zeroSyncSectorNum[i] = i;
+				fprintf(fpError, "LBA[%06ld, %#07lx], This sector has zero sync\n", i, i);
 			} else if (!skipTrackModeCheck && trackMode != trackModeLocal) {
 				fprintf(fpError, "LBA[%06ld, %#07lx], This sector has changed track mode: %d %d\n", i, i, trackMode, trackModeLocal);
 
@@ -997,7 +563,8 @@ int handleCheckOrFix(LPCSTR filePath, EXEC_TYPE execType, DWORD startLBA, DWORD 
 			fprintf(fpError, "LBA[%06ld, %#07lx], This sector is audio or scrambled data or corrupt data\n", i, i);
 		}
 
-		OutputString("\rChecking data sectors (LBA) %6lu/%6lu", i, startLBA + roopSize - 1);
+//		OutputString("\rChecking data sectors (LBA) %6lu/%6lu", i, startLBA + roopSize - 1);
+		OutputString("\rChecking data sectors (LBA) %6lu/%6d", i, roopSize - 1);
 	}
 
 	INT nonZeroSyncIndexStart = 0;
@@ -1156,17 +723,14 @@ int handleCheckOrFix(LPCSTR filePath, EXEC_TYPE execType, DWORD startLBA, DWORD 
 	free(reservedSectorNum);
 	free(noEDCSectorNum);
 	free(flagSectorNum);
-
-	DWORD fpErrorSize = GetFileSize(0, fpError);
-
-	fclose(fpError);
 	fclose(fp);
 
-	if (!fpErrorSize) {
+	if (!GetFileSize(0, fpError)) {
 		if (remove(errorLogFilePath)) {
 			OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		}
 	}
+	fclose(fpError);
 
 	return EXIT_SUCCESS;
 }
