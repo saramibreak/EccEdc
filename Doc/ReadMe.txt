@@ -71,3 +71,6 @@ fixed: the init value of error count
 merged: the code of branch
 refactoring: splitted the src, removed and disabled build warning
 added: some messages
+
+*2017-04-14
+added: read subchannel file (for reading the data sector definitely)
