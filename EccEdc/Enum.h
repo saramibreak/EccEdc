@@ -26,10 +26,12 @@ typedef enum _SectorType {
 	// Error
 	SectorTypeMode1BadEcc = -1,
 	SectorTypeMode1ReservedNotZero = -2,
-	SectorTypeMode2FlagsNotSame = -3,
-	SectorTypeNonZeroInvalidSync = -4,
-	SectorTypeZeroSync = -5,
-	SectorTypeUnknownMode = -6,
+	SectorTypeMode2Form1FlagsNotSame = -3,
+	SectorTypeMode2Form2FlagsNotSame = -4,
+	SectorTypeMode2FlagsNotSame = -5,
+	SectorTypeNonZeroInvalidSync = -6,
+	SectorTypeZeroSync = -7,
+	SectorTypeUnknownMode = -8,
 } SectorType;
 
 typedef enum _TrackMode {

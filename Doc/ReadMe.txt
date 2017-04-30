@@ -74,3 +74,8 @@ added: some messages
 
 *2017-04-14
 added: read subchannel file (for reading the data sector definitely)
+
+*2017-04-30
+changed: Some log message
+changed: Split some code
+changed: Disabled SSE2 of vcxproj (for old CPU)

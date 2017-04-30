@@ -293,14 +293,19 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 					//
 					// Might be Mode 2, Form 2
 					//
-					if (edc_compute(0, sector + 0x10, 0x91C) == get32lsb(sector + 0x10 + 0x91C)) {
+					else if (edc_compute(0, sector + 0x10, 0x91C) == get32lsb(sector + 0x10 + 0x91C)) {
 						return SectorTypeMode2Form2; // Mode 2, Form 2
 					}
-					else {
-						return SectorTypeMode2; // Mode 2, No EDC (for PlayStation)
-					}
+					return SectorTypeMode2; // Mode 2, No EDC (for PlayStation)
 				}
 				else {
+					if (ecc_checksector(zeroaddress, sector + 0x10, sector + 0x10 + 0x80C) &&
+						edc_compute(0, sector + 0x10, 0x808) == get32lsb(sector + 0x10 + 0x808)) {
+						return SectorTypeMode2Form1FlagsNotSame;
+					}
+					else if (edc_compute(0, sector + 0x10, 0x91C) == get32lsb(sector + 0x10 + 0x91C)) {
+						return SectorTypeMode2Form2FlagsNotSame;
+					}
 					return SectorTypeMode2FlagsNotSame; // flags aren't same
 				}
 			}
