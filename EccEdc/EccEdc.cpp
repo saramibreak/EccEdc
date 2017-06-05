@@ -171,7 +171,7 @@ INT fixSectorsFromArray(
 
 	for (INT i = 0; i < sectorCount; i++) {
 		if (startLBA <= errorSectors[i] && errorSectors[i] <= endLBA) {
-			if (execType == checkex) {
+			if (execType == fixex) {
 				fseek(fp, (LONG)((errorSectors[i] - startLBA) * CD_RAW_SECTOR_SIZE + 12), SEEK_SET);
 			}
 			else {
@@ -485,7 +485,7 @@ INT handleCheckOrFix(
 			return EXIT_FAILURE;
 		}
 	}
-	else if (execType == fix) {
+	else if (execType == fix || execType == fixex) {
 		if (NULL == (fp = fopen(filePath, "rb+"))) {
 			OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 			return EXIT_FAILURE;
@@ -717,7 +717,7 @@ INT handleCheckOrFix(
 		OutputLog("\n");
 	}
 
-	if (execType == fix) {
+	if (execType == fix || execType == fixex) {
 		if (errStruct.cnt_SectorTypeMode1BadEcc || errStruct.cnt_SectorTypeNonZeroInvalidSync) {
 			INT fixedCnt = 0;
 
@@ -828,7 +828,7 @@ INT handleCheckOrFixEx(
 			sprintf(suffixBuffer, "Track_%lu.txt", track.trackNo + 1);
 
 			std::string logFilePath = std::string(filePath) + "_EdcEcc_" + suffixBuffer;
-			EXEC_TYPE trackType = execType == checkex ? checkex : fix;
+			EXEC_TYPE trackType = execType == checkex ? checkex : fixex;
 
 			if ((retVal = handleCheckOrFix(track.trackPath.c_str(), trackType, track.lsnStart, track.lsnEnd, track.trackMode, logFilePath.c_str())) != EXIT_SUCCESS) {
 				OutputString("Cannot check track: %s\n", track.trackPath.c_str());
