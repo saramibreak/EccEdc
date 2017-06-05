@@ -828,7 +828,7 @@ INT handleCheckEx(
 
 			std::string logFilePath = std::string(filePath) + "_EdcEcc_" + suffixBuffer;
 
-			if ((retVal = handleCheckOrFix(track.trackPath.c_str(), check, track.lsnStart, track.lsnEnd, track.trackMode, logFilePath.c_str())) != EXIT_SUCCESS) {
+			if ((retVal = handleCheckOrFix(track.trackPath.c_str(), checkex, track.lsnStart, track.lsnEnd, track.trackMode, logFilePath.c_str())) != EXIT_SUCCESS) {
 				OutputString("Cannot check track: %s\n", track.trackPath.c_str());
 
 				break;
