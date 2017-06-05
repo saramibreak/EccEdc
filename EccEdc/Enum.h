@@ -44,6 +44,7 @@ typedef enum _TrackMode {
 typedef enum _EXEC_TYPE {
 	check,
 	checkex,
+	fixex,
 	fix,
 	write
 } EXEC_TYPE, *PEXEC_TYPE;

@@ -743,8 +743,9 @@ INT handleCheckOrFix(
 	return EXIT_SUCCESS;
 }
 
-INT handleCheckEx(
-	LPCSTR filePath
+INT handleCheckOrFixEx(
+	LPCSTR filePath,
+	EXEC_TYPE execType
 ) {
 	std::vector<std::string> cueLines;
 
@@ -827,8 +828,9 @@ INT handleCheckEx(
 			sprintf(suffixBuffer, "Track_%lu.txt", track.trackNo + 1);
 
 			std::string logFilePath = std::string(filePath) + "_EdcEcc_" + suffixBuffer;
+			EXEC_TYPE trackType = execType == checkex ? checkex : fix;
 
-			if ((retVal = handleCheckOrFix(track.trackPath.c_str(), checkex, track.lsnStart, track.lsnEnd, track.trackMode, logFilePath.c_str())) != EXIT_SUCCESS) {
+			if ((retVal = handleCheckOrFix(track.trackPath.c_str(), trackType, track.lsnStart, track.lsnEnd, track.trackMode, logFilePath.c_str())) != EXIT_SUCCESS) {
 				OutputString("Cannot check track: %s\n", track.trackPath.c_str());
 
 				break;
@@ -892,6 +894,8 @@ VOID printUsage(
 		"\t\tReplace data of 2336 byte to '0x55' except header\n"
 		"\tfix <InOutFileName> <startLBA> <endLBA>\n"
 		"\t\tReplace data of 2336 byte to '0x55' except header from <startLBA> to <endLBA>\n"
+		"\tfixex <CueFile>\n"
+		"\t\tReplace data of 2336 byte to '0x55' except header\n"
 		"\twrite <OutFileName> <Minute> <Second> <Frame> <Mode> <CreateSectorNum>\n"
 		"\t\tCreate a 2352 byte per sector with sync, addr, mode, ecc, edc. (User data is all zero)\n"
 		"\t\tMode\t1: mode 1, 2: mode 2 form 1, 3: mode 2 form 2\n"
@@ -911,6 +915,9 @@ INT checkArg(
 	}
 	else if (argc == 3 && (!strcmp(argv[1], "checkex"))) {
 		*pExecType = checkex;
+	}
+	else if (argc == 3 && (!strcmp(argv[1], "fixex"))) {
+		*pExecType = fixex;
 	}
 	else if (argc == 3 && (!strcmp(argv[1], "fix"))) {
 		*pExecType = fix;
@@ -1006,8 +1013,8 @@ int main(int argc, char** argv)
 
 		retVal = handleCheckOrFix(argv[2], execType, check_fix_mode_s_startLBA, check_fix_mode_s_endLBA, TrackModeUnknown, logFilePath.c_str());
 	}
-	else if (execType == checkex) {
-		retVal = handleCheckEx(argv[2]);
+	else if (execType == checkex || execType == fixex) {
+		retVal = handleCheckOrFixEx(argv[2], execType);
 	}
 	else if (execType == write) {
 		retVal = handleWrite(argv[2]);
