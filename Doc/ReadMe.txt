@@ -79,3 +79,6 @@ added: read subchannel file (for reading the data sector definitely)
 changed: Some log message
 changed: Split some code
 changed: Disabled SSE2 of vcxproj (for old CPU)
+
+*2017-07-02
+fixed: forgot FLAG DCP
