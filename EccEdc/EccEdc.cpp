@@ -542,7 +542,7 @@ INT handleCheckOrFix(
 		if (fpSub) {
 			fread(subbuf, sizeof(BYTE), sizeof(subbuf), fpSub);
 			BYTE byCtl = (BYTE)((subbuf[12] >> 4) & 0x0f);
-			if (byCtl == 0x04) {
+			if (byCtl & 0x04) {
 				handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, i, j, TRUE);
 			}
 			else {
