@@ -254,63 +254,94 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 				if (trackMode) {
 					*trackMode = TrackMode1;
 				}
-				if (sector[0x814] == 0x00 && sector[0x815] == 0x00 && sector[0x816] == 0x00 && sector[0x817] == 0x00 &&
-					sector[0x818] == 0x00 && sector[0x819] == 0x00 && sector[0x81A] == 0x00 && sector[0x81B] == 0x00) { // reserved (8 bytes)
-					//
-					// Might be Mode 1
-					//
-					if (ecc_checksector(sector + 0xC, sector + 0x10, sector + 0x81C) &&
-						edc_compute(0, sector, 0x810) == get32lsb(sector + 0x810)) {
+				if (ecc_checksector(sector + 0xC, sector + 0x10, sector + 0x81C) &&
+					edc_compute(0, sector, 0x810) == get32lsb(sector + 0x810)) {
+					if (sector[0x814] == 0x00 && sector[0x815] == 0x00 && sector[0x816] == 0x00 && sector[0x817] == 0x00 &&
+						sector[0x818] == 0x00 && sector[0x819] == 0x00 && sector[0x81A] == 0x00 && sector[0x81B] == 0x00) { // reserved (8 bytes)
+						//
+						// Might be Mode 1
+						//
 						return SectorTypeMode1; // Mode 1
 					}
 					else {
-						return SectorTypeMode1BadEcc; // Mode 1 probably protect (safedisc etc)
+						return SectorTypeMode1ReservedNotZero; // Mode 1 but 0x814-81B isn't zero
 					}
 				}
 				else {
-					if (ecc_checksector(sector + 0xC, sector + 0x10, sector + 0x81C) &&
-						edc_compute(0, sector, 0x810) == get32lsb(sector + 0x810)) {
-						return SectorTypeMode1ReservedNotZero; // Mode 1 but 0x814-81B isn't zero
-					}
-					else {
-						return SectorTypeMode1BadEcc; // Mode 1 probably protect (safedisc etc)
-					}
+					return SectorTypeMode1BadEcc; // Mode 1 probably protect (safedisc etc)
 				}
 			}
 			else if (sector[0x0F] == 0x02) { // mode (1 byte)
 				if (trackMode) {
 					*trackMode = TrackMode2;
 				}
-				if (sector[0x10] == sector[0x14] && sector[0x11] == sector[0x15] &&
-					sector[0x12] == sector[0x16] && sector[0x13] == sector[0x17]) { // flags (4 bytes) versus redundant copy
-					//
-					// Might be Mode 2, Form 1 or 2
-					//
-					if (ecc_checksector(zeroaddress, sector + 0x10, sector + 0x10 + 0x80C) &&
-						edc_compute(0, sector + 0x10, 0x808) == get32lsb(sector + 0x10 + 0x808)) {
+				//
+				// Might be Mode 2, Form 1
+				//
+				if (ecc_checksector(zeroaddress, sector + 0x10, sector + 0x10 + 0x80C) &&
+					edc_compute(0, sector + 0x10, 0x808) == get32lsb(sector + 0x10 + 0x808)) {
+					if (sector[0x10] == sector[0x14] && sector[0x11] == sector[0x15] &&
+						sector[0x12] == sector[0x16] && sector[0x13] == sector[0x17]) { // flags (4 bytes) versus redundant copy
 						return SectorTypeMode2Form1; // Mode 2, Form 1
 					}
-					//
-					// Might be Mode 2, Form 2
-					//
-					else if (edc_compute(0, sector + 0x10, 0x91C) == get32lsb(sector + 0x10 + 0x91C)) {
-						return SectorTypeMode2Form2; // Mode 2, Form 2
-					}
-					return SectorTypeMode2; // Mode 2, No EDC (for PlayStation)
-				}
-				else {
-					if (ecc_checksector(zeroaddress, sector + 0x10, sector + 0x10 + 0x80C) &&
-						edc_compute(0, sector + 0x10, 0x808) == get32lsb(sector + 0x10 + 0x808)) {
+					else {
 						return SectorTypeMode2Form1FlagsNotSame;
 					}
-					else if (edc_compute(0, sector + 0x10, 0x91C) == get32lsb(sector + 0x10 + 0x91C)) {
+				}
+				//
+				// Might be Mode 2, Form 2
+				//
+				else if (edc_compute(0, sector + 0x10, 0x91C) == get32lsb(sector + 0x10 + 0x91C)) {
+					if (sector[0x10] == sector[0x14] && sector[0x11] == sector[0x15] &&
+						sector[0x12] == sector[0x16] && sector[0x13] == sector[0x17]) { // flags (4 bytes) versus redundant copy
+						return SectorTypeMode2Form2; // Mode 2, Form 2
+					}
+					else {
 						return SectorTypeMode2Form2FlagsNotSame;
 					}
-					return SectorTypeMode2FlagsNotSame; // flags aren't same
+				}
+				else {
+					if (sector[0x10] == sector[0x14] && sector[0x11] == sector[0x15] &&
+						sector[0x12] == sector[0x16] && sector[0x13] == sector[0x17]) { // flags (4 bytes) versus redundant copy
+						return SectorTypeMode2; // Mode 2, No EDC (for PlayStation)
+					}
+					else {
+						return SectorTypeMode2FlagsNotSame; // flags aren't same
+					}
 				}
 			}
-
-			return SectorTypeUnknownMode;
+			else {
+				if (ecc_checksector(sector + 0xC, sector + 0x10, sector + 0x81C) &&
+					edc_compute(0, sector, 0x810) == get32lsb(sector + 0x810)) {
+					if (trackMode) {
+						*trackMode = TrackMode1;
+					}
+					if (sector[0x814] == 0x00 && sector[0x815] == 0x00 && sector[0x816] == 0x00 && sector[0x817] == 0x00 &&
+						sector[0x818] == 0x00 && sector[0x819] == 0x00 && sector[0x81A] == 0x00 && sector[0x81B] == 0x00) { // reserved (8 bytes)
+						return SectorTypeMode1; // Mode unknown but regard as mode 1
+					}
+					else {
+						return SectorTypeMode1ReservedNotZero; // Mode 1 but 0x814-81B isn't zero
+					}
+				}
+				else {
+					if (sector[0x814] == 0x00 && sector[0x815] == 0x00 && sector[0x816] == 0x00 && sector[0x817] == 0x00 &&
+						sector[0x818] == 0x00 && sector[0x819] == 0x00 && sector[0x81A] == 0x00 && sector[0x81B] == 0x00) { // reserved (8 bytes)
+						if (trackMode) {
+							*trackMode = TrackMode1;
+						}
+						return SectorTypeMode1BadEcc; // Mode unknown but regard as mode 1
+					}
+					else {
+						if (trackMode) {
+							*trackMode = TrackModeUnknown;
+						}
+						else {
+							return SectorTypeUnknownMode;
+						}
+					}
+				}
+			}
 		}
 		else if (sector[0x000] || sector[0x001] || sector[0x002] || sector[0x003] ||
 			sector[0x004] || sector[0x005] || sector[0x006] || sector[0x007] ||

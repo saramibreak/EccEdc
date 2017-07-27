@@ -716,6 +716,12 @@ INT handleCheckOrFix(
 		OutputString("\n");
 		OutputLog("\n");
 	}
+	else {
+		INT errors = errStruct.cnt_SectorFilled55 + errStruct.cnt_SectorTypeMode1BadEcc +
+			errStruct.cnt_SectorTypeUnknownMode + errStruct.cnt_SectorTypeNonZeroInvalidSync + errStruct.cnt_SectorTypeZeroSync;
+		OutputString("Total errors: %d\n", errors);
+		OutputLog("Total errors: %d\n", errors);
+	}
 
 	if (execType == fix) {
 		if (errStruct.cnt_SectorTypeMode1BadEcc || errStruct.cnt_SectorTypeNonZeroInvalidSync) {
