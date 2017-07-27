@@ -82,3 +82,7 @@ changed: Disabled SSE2 of vcxproj (for old CPU)
 
 *2017-07-02
 fixed: forgot FLAG DCP
+
+*2017-07-28
+added: print total errors
+added: check the reserved byte for unknown mode
