@@ -336,9 +336,7 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 						if (trackMode) {
 							*trackMode = TrackModeUnknown;
 						}
-						else {
-							return SectorTypeUnknownMode;
-						}
+						return SectorTypeUnknownMode;
 					}
 				}
 			}
