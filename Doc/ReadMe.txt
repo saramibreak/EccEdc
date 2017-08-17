@@ -86,3 +86,6 @@ fixed: forgot FLAG DCP
 *2017-07-28
 added: print total errors
 added: check the reserved byte for unknown mode
+
+*2017-08-17
+fixed: invalid mode
