@@ -285,7 +285,7 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 						return SectorTypeMode2Form1; // Mode 2, Form 1
 					}
 					else {
-						return SectorTypeMode2Form1FlagsNotSame;
+						return SectorTypeMode2Form1SubheaderNotSame;
 					}
 				}
 				//
@@ -297,7 +297,7 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 						return SectorTypeMode2Form2; // Mode 2, Form 2
 					}
 					else {
-						return SectorTypeMode2Form2FlagsNotSame;
+						return SectorTypeMode2Form2SubheaderNotSame;
 					}
 				}
 				else {
@@ -306,7 +306,7 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 						return SectorTypeMode2; // Mode 2, No EDC (for PlayStation)
 					}
 					else {
-						return SectorTypeMode2FlagsNotSame; // flags aren't same
+						return SectorTypeMode2SubheaderNotSame;
 					}
 				}
 			}

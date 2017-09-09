@@ -26,9 +26,9 @@ typedef enum _SectorType {
 	// Error
 	SectorTypeMode1BadEcc = -1,
 	SectorTypeMode1ReservedNotZero = -2,
-	SectorTypeMode2Form1FlagsNotSame = -3,
-	SectorTypeMode2Form2FlagsNotSame = -4,
-	SectorTypeMode2FlagsNotSame = -5,
+	SectorTypeMode2Form1SubheaderNotSame = -3,
+	SectorTypeMode2Form2SubheaderNotSame = -4,
+	SectorTypeMode2SubheaderNotSame = -5,
 	SectorTypeNonZeroInvalidSync = -6,
 	SectorTypeZeroSync = -7,
 	SectorTypeUnknownMode = -8,
@@ -47,3 +47,9 @@ typedef enum _EXEC_TYPE {
 	fix,
 	write
 } EXEC_TYPE, *PEXEC_TYPE;
+
+typedef enum _LOG_TYPE {
+	standardOut = 1,
+	standardError = 1 << 1,
+	file = 1 << 2,
+} LOG_TYPE, *PLOG_TYPE;
