@@ -89,3 +89,6 @@ added: check the reserved byte for unknown mode
 
 *2017-08-17
 fixed: invalid mode
+
+*2017-09-09
+changed: Some log messages
