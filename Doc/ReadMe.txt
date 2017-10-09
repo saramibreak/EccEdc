@@ -92,3 +92,7 @@ fixed: invalid mode
 
 *2017-09-09
 changed: Some log messages
+
+*2017-10-10
+added: Write MSF
+added: Distinguish between zero sync and zero sync of the pregap sector

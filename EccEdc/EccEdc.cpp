@@ -38,6 +38,7 @@ typedef struct _ERROR_STRUCT {
 	INT cnt_SectorTypeNonZeroInvalidSync = 0; // For VOB
 	INT cnt_SectorTypeUnknownMode = 0; // For SecuROM
 	INT cnt_SectorTypeZeroSync = 0;
+	INT cnt_SectorTypeZeroSyncPregap = 0;
 	DWORD* errorSectorNum;
 	DWORD* noMatchLBANum;
 	DWORD* reservedSectorNum;
@@ -45,6 +46,7 @@ typedef struct _ERROR_STRUCT {
 	DWORD* flagSectorNum;
 	DWORD* nonZeroInvalidSyncSectorNum;
 	DWORD* zeroSyncSectorNum;
+	DWORD* zeroSyncPregapSectorNum;
 	DWORD* unknownModeSectorNum;
 } ERROR_STRUCT, *PERROR_STRUCT;
 
@@ -53,7 +55,8 @@ typedef struct _ERROR_STRUCT {
 #define OutputString(str, ...)		printf(str, __VA_ARGS__);
 #define OutputErrorString(str, ...)	fprintf(stderr, str, __VA_ARGS__);
 #define OutputFile(str, ...)		fprintf(fpLog, str, __VA_ARGS__);
-#define OutputFileWithLBA(str, ...)	fprintf(fpLog, "LBA[%06ld, %#07lx], " str, __VA_ARGS__);
+#define OutputFileWithLba(str, ...)	fprintf(fpLog, "LBA[%06ld, %#07lx], " str, __VA_ARGS__);
+#define OutputFileWithLbaMsf(str, ...)	fprintf(fpLog, "LBA[%06ld, %#07lx], MSF[%02x:%02x:%02x], " str, __VA_ARGS__);
 #define OutputLog(type, str, ...) \
 { \
 	INT t = type; \
@@ -245,6 +248,10 @@ INT initCountNum(
 	}
 	memset((*pErrStruct).zeroSyncSectorNum, 0xFF, stAllocSize * sizeof(DWORD));
 
+	if (NULL == ((*pErrStruct).zeroSyncPregapSectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+		return FALSE;
+	}
 	if (NULL == ((*pErrStruct).unknownModeSectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
@@ -258,6 +265,7 @@ VOID terminateCountNum(
 	FreeAndNull((*pErrStruct).unknownModeSectorNum);
 	FreeAndNull((*pErrStruct).nonZeroInvalidSyncSectorNum);
 	FreeAndNull((*pErrStruct).zeroSyncSectorNum);
+	FreeAndNull((*pErrStruct).zeroSyncPregapSectorNum);
 	FreeAndNull((*pErrStruct).errorSectorNum);
 	FreeAndNull((*pErrStruct).noMatchLBANum);
 	FreeAndNull((*pErrStruct).reservedSectorNum);
@@ -273,10 +281,11 @@ INT handleCheckDetail(
 	TrackMode trackMode,
 	DWORD roopCnt,
 	DWORD roopCnt2,
-	BOOL bSub
+	BOOL bSub,
+	BYTE byIdx
 ) {
 	if (IsErrorSector(buf)) {
-		OutputFileWithLBA("2336 bytes have been already replaced at 0x55\n", roopCnt, roopCnt);
+		OutputFileWithLbaMsf("2336 bytes have been already replaced at 0x55\n", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 		pErrStruct->errorSectorNum[pErrStruct->cnt_SectorFilled55++] = roopCnt;
 		return TRUE;
 	}
@@ -290,7 +299,7 @@ INT handleCheckDetail(
 	}
 
 	if (sectorType == SectorTypeMode1 || sectorType == SectorTypeMode1BadEcc || sectorType == SectorTypeMode1ReservedNotZero) {
-		OutputFileWithLBA("mode 1", roopCnt, roopCnt);
+		OutputFileWithLbaMsf("mode 1", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 
 		if (sectorType == SectorTypeMode1) {
 			OutputFile("\n");
@@ -324,7 +333,7 @@ INT handleCheckDetail(
 		sectorType == SectorTypeMode2Form2SubheaderNotSame || sectorType == SectorTypeMode2SubheaderNotSame) {
 		BOOL bNoEdc = FALSE;
 
-		OutputFileWithLBA("mode 2 ", roopCnt, roopCnt);
+		OutputFileWithLbaMsf("mode 2 ", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 
 		if (sectorType == SectorTypeMode2Form1) {
 			OutputFile("form 1, ");
@@ -449,34 +458,44 @@ INT handleCheckDetail(
 		OutputFile("\n");
 	}
 	else if (sectorType == SectorTypeUnknownMode) {
-		OutputFileWithLBA("unknown mode: %02x\n", roopCnt, roopCnt, buf[15]);
+		OutputFileWithLbaMsf("unknown mode: %02x\n", roopCnt, roopCnt, buf[12], buf[13], buf[14], buf[15]);
 		pErrStruct->unknownModeSectorNum[pErrStruct->cnt_SectorTypeUnknownMode++] = roopCnt;
 	}
 	else if (!skipTrackModeCheck && trackMode != trackModeLocal) {
-		OutputFileWithLBA("changed track mode: %d %d\n", roopCnt, roopCnt, trackMode, trackModeLocal);
+		OutputFileWithLbaMsf("changed track mode: %d %d\n", roopCnt, roopCnt, buf[12], buf[13], buf[14], trackMode, trackModeLocal);
 		pErrStruct->unknownModeSectorNum[pErrStruct->cnt_SectorTypeUnknownMode++] = roopCnt;
 	}
 	else if (sectorType == SectorTypeNonZeroInvalidSync) {
 		if (bSub) {
-			OutputFileWithLBA("invalid sync\n", roopCnt, roopCnt);
+			OutputFileWithLbaMsf("invalid sync\n", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 		}
 		else {
-			OutputFileWithLBA("audio or invalid sync\n", roopCnt, roopCnt);
+			OutputFileWithLbaMsf("audio or invalid sync\n", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 		}
 		pErrStruct->nonZeroInvalidSyncSectorNum[pErrStruct->cnt_SectorTypeNonZeroInvalidSync++] = roopCnt;
 	}
 	else if (sectorType == SectorTypeZeroSync) {
 		if (bSub) {
-			OutputFileWithLBA("zero sync\n", roopCnt, roopCnt);
+			if (byIdx == 0) {
+				OutputFileWithLbaMsf("zero sync (pregap)\n", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
+			}
+			else {
+				OutputFileWithLbaMsf("zero sync\n", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
+			}
 		}
 		else {
-			OutputFileWithLBA("audio or zero sync\n", roopCnt, roopCnt);
+			OutputFileWithLbaMsf("audio or zero sync\n", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 		}
 		if (execType == checkex) {
 			pErrStruct->zeroSyncSectorNum[roopCnt2] = roopCnt;
 		}
 		else {
-			pErrStruct->zeroSyncSectorNum[pErrStruct->cnt_SectorTypeZeroSync++] = roopCnt;
+			if (bSub && byIdx == 0) {
+				pErrStruct->zeroSyncPregapSectorNum[pErrStruct->cnt_SectorTypeZeroSyncPregap++] = roopCnt;
+			}
+			else {
+				pErrStruct->zeroSyncSectorNum[pErrStruct->cnt_SectorTypeZeroSync++] = roopCnt;
+			}
 		}
 	}
 	return TRUE;
@@ -556,14 +575,14 @@ INT handleCheckOrFix(
 			fread(subbuf, sizeof(BYTE), sizeof(subbuf), fpSub);
 			BYTE byCtl = (BYTE)((subbuf[12] >> 4) & 0x0f);
 			if (byCtl & 0x04) {
-				handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, i, j, TRUE);
+				handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, i, j, TRUE, subbuf[14]);
 			}
 			else {
-				OutputFileWithLBA("audio\n", i, i);
+				OutputFileWithLba("audio\n", i, i);
 			}
 		}
 		else {
-			handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, i, j, FALSE);
+			handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, i, j, FALSE, 0);
 		}
 
 		if (execType == checkex) {
@@ -689,6 +708,10 @@ INT handleCheckOrFix(
 			}
 		}
 		OutputFile("\n");
+	}
+	if (fpSub && errStruct.cnt_SectorTypeZeroSyncPregap) {
+		OutputLog(standardOut | file,
+			"[INFO] Number of pregap sector(s) where sync(0x00 - 0x0c) is zero: %d\n", errStruct.cnt_SectorTypeZeroSyncPregap);
 	}
 
 	if (fpSub && errStruct.cnt_SectorFilled55 == 0 && errStruct.cnt_SectorTypeMode1BadEcc == 0
@@ -898,6 +921,7 @@ VOID printUsage(
 		"\t\tCreate a 2352 byte per sector with sync, addr, mode, ecc, edc. (User data is all zero)\n"
 		"\t\tMode\t1: mode 1, 2: mode 2 form 1, 3: mode 2 form 2\n"
 	);
+	system("pause");
 }
 
 INT checkArg(
