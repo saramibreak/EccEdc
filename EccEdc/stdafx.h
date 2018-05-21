@@ -9,10 +9,26 @@
 
 // TODO: プログラムに必要な追加ヘッダーをここで参照してください。
 
-#pragma warning(disable: 4464 4711 4668 4710 4820)
+#pragma warning(disable: 4710 4711)
+#pragma warning(push)
+#pragma warning(disable: 4365 4464 4571 4625 4626 4668 4774 4820 5026 5027 5039)
 #include <Windows.h>
 
 #include <string>
 #include <cstdio>
 #include <cassert>
 #include <vector>
+
+#include <Shlwapi.h>
+
+#include <algorithm>
+#include <functional>
+#include <cctype>
+#include <locale>
+
+#pragma comment(lib, "shlwapi.lib")
+
+#include <sstream>
+#include <fstream>
+
+#pragma warning(pop)

@@ -62,3 +62,8 @@ changed: Some log messages
 *2017-10-10
 added: Write MSF
 added: Distinguish between zero sync and zero sync of the pregap sector
+
+*2018-05-22
+changed: Visual Studio 2015 to 2017
+changed: MultiThreaded to MultiThreadedDLL
+improved: mode 2 (for PS2 unlicensed disc)

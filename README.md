@@ -8,10 +8,7 @@
  Start cmd.exe & run exe. for more information, run in no arg.
 
 ## Development Tool
- Visual Studio 2015 (Visual C++ 2015)
-
-## Source Code
- https://github.com/saramibreak/EccEdc
+ Visual Studio 2017 (Visual C++ 2017)
 
 ## License
  See LICENSE  

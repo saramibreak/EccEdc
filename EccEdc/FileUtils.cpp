@@ -1,8 +1,5 @@
 #include "FileUtils.hpp"
 
-#include <sstream>
-#include <fstream>
-
 namespace FileUtils {
 	BOOL readFileLines(LPCSTR filePath, std::vector<std::string> & lines) {
 		std::ifstream infile(filePath);

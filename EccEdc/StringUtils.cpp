@@ -1,14 +1,5 @@
 #include "StringUtils.hpp"
 
-#include <Shlwapi.h>
-
-#include <algorithm>
-#include <functional>
-#include <cctype>
-#include <locale>
-
-#pragma comment(lib, "shlwapi.lib")
-
 namespace StringUtils {
 	BOOL startsWith(const std::wstring & str, const std::wstring & lookFor) {
 		if (lookFor.size() > str.size())
