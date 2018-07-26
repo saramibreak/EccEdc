@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="header">
+      <UniqueIdentifier>{bb20d412-31ca-4af6-ade3-f937515be805}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source">
+      <UniqueIdentifier>{9dc70496-6e4b-4cf8-b060-e1f640b88b5c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="_external">
+      <UniqueIdentifier>{a366a73f-0e9a-482a-ab2d-f8f8bd31b513}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="_linux">
+      <UniqueIdentifier>{2ccfc485-571f-40d6-9767-9f86adfe29e5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="EccEdc.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="_external\ecm.cpp">
+      <Filter>_external</Filter>
+    </ClCompile>
+    <ClCompile Include="_linux\defineForLinux.cpp">
+      <Filter>_linux</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Enum.h">
+      <Filter>header</Filter>
+    </ClInclude>
+    <ClInclude Include="_external\ecm.h">
+      <Filter>_external</Filter>
+    </ClInclude>
+    <ClInclude Include="_linux\defineForLinux.h">
+      <Filter>_linux</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

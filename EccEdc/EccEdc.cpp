@@ -14,9 +14,10 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 ////////////////////////////////////////////////////////////////////////////////
-
+#ifdef _WIN32
 #include "StringUtils.hpp"
 #include "FileUtils.hpp"
+#endif
 #include "Enum.h"
 #include "_external/ecm.h"
 
@@ -56,22 +57,22 @@ typedef struct _ERROR_STRUCT {
 
 #define CD_RAW_SECTOR_SIZE	(2352)
 
-#define OutputString(str, ...)		printf(str, __VA_ARGS__);
-#define OutputErrorString(str, ...)	fprintf(stderr, str, __VA_ARGS__);
-#define OutputFile(str, ...)		fprintf(fpLog, str, __VA_ARGS__);
-#define OutputFileWithLba(str, ...)	fprintf(fpLog, "LBA[%06ld, %#07lx], " str, __VA_ARGS__);
-#define OutputFileWithLbaMsf(str, ...)	fprintf(fpLog, "LBA[%06ld, %#07lx], MSF[%02x:%02x:%02x], " str, __VA_ARGS__);
+#define OutputString(str, ...)		printf(str, ##__VA_ARGS__);
+#define OutputErrorString(str, ...)	fprintf(stderr, str, ##__VA_ARGS__);
+#define OutputFile(str, ...)		fprintf(fpLog, str, ##__VA_ARGS__);
+#define OutputFileWithLba(str, ...)	fprintf(fpLog, "LBA[%06ld, %#07lx], " str, ##__VA_ARGS__);
+#define OutputFileWithLbaMsf(str, ...)	fprintf(fpLog, "LBA[%06ld, %#07lx], MSF[%02x:%02x:%02x], " str, ##__VA_ARGS__);
 #define OutputLog(type, str, ...) \
 { \
 	INT t = type; \
 	if ((t & standardOut) == standardOut) { \
-		OutputString(str, __VA_ARGS__); \
+		OutputString(str, ##__VA_ARGS__); \
 	} \
 	if ((t & standardError) == standardError) { \
-		OutputErrorString(str, __VA_ARGS__); \
+		OutputErrorString(str, ##__VA_ARGS__); \
 	} \
 	if ((t & file) == file) { \
-		OutputFile(str, __VA_ARGS__); \
+		OutputFile(str, ##__VA_ARGS__); \
 	} \
 }
 
@@ -87,14 +88,20 @@ VOID OutputLastErrorNumAndString(
 	LPCSTR pszFuncName,
 	LONG lLineNum
 ) {
+#ifdef _WIN32
 	LPVOID lpMsgBuf;
 	FormatMessage(
 		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_FROM_SYSTEM,
 		NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&lpMsgBuf, 0, NULL);
 
-	OutputErrorString("[F:%s][L:%ld] GetLastError: %lu, %s\n",
-		pszFuncName, lLineNum, GetLastError(), (LPCSTR)lpMsgBuf);
+	OutputErrorString(_T("[F:%s][L:%lu] GetLastError: %lu, %s\n"),
+		pszFuncName, lLineNum, GetLastError(), (LPCTSTR)lpMsgBuf);
+
 	LocalFree(lpMsgBuf);
+#else
+	OutputErrorString(_T("[F:%s][L:%lu] GetLastError: %lu, %s\n"),
+		pszFuncName, lLineNum, GetLastError(), strerror(GetLastError()));
+#endif
 }
 
 BOOL IsValidDataHeader(
@@ -192,12 +199,16 @@ INT fixSectorsFromArray(
 
 	for (INT i = 0; i < sectorCount; i++) {
 		if (startLBA <= errorSectors[i] && errorSectors[i] <= endLBA) {
+#ifdef _WIN32
 			if (execType == checkex) {
 				fseek(fp, (LONG)((errorSectors[i] - startLBA) * CD_RAW_SECTOR_SIZE + 12), SEEK_SET);
 			}
 			else {
+#endif
 				fseek(fp, (LONG)(errorSectors[i] * CD_RAW_SECTOR_SIZE + 12), SEEK_SET);
+#ifdef _WIN32
 			}
+#endif
 			BYTE m, s, f;
 			LBAtoMSF((INT)errorSectors[i] + 150, &m, &s, &f);
 
@@ -503,17 +514,21 @@ INT handleCheckDetail(
 		else {
 			OutputFileWithLbaMsf("audio or zero sync\n", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 		}
+#ifdef _WIN32
 		if (execType == checkex) {
 			pErrStruct->zeroSyncSectorNum[roopCnt2] = roopCnt;
 		}
 		else {
+#endif
 			if (bSub && byIdx == 0) {
 				pErrStruct->zeroSyncPregapSectorNum[pErrStruct->cnt_SectorTypeZeroSyncPregap++] = roopCnt;
 			}
 			else {
 				pErrStruct->zeroSyncSectorNum[pErrStruct->cnt_SectorTypeZeroSync++] = roopCnt;
 			}
+#ifdef _WIN32
 		}
+#endif
 	}
 	return TRUE;
 }
@@ -559,6 +574,7 @@ INT handleCheckOrFix(
 	FILE* fpSub = NULL;
 	if (NULL == (fpSub = fopen(path, "rb"))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+		OutputErrorString("%s\n", path);
 		OutputErrorString("If sub file exists, this app can check the data sector precisely\n");
 	}
 
@@ -584,9 +600,11 @@ INT handleCheckOrFix(
 		OutputFile("Sub file doesn't exist\n");
 	}
 	for (DWORD i = 0; i < roopSize; i++, j++) {
+#ifdef _WIN32
 		if (execType == checkex) {
 			i = j + startLBA;
 		}
+#endif
 		fread(buf, sizeof(BYTE), sizeof(buf), fp);
 		if (fpSub) {
 			fread(subbuf, sizeof(BYTE), sizeof(subbuf), fpSub);
@@ -602,18 +620,22 @@ INT handleCheckOrFix(
 			handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, i, j, FALSE, 0);
 		}
 
+#ifdef _WIN32
 		if (execType == checkex) {
 			OutputString("\rChecking sectors (LBA) %6lu/%6lu", i, startLBA + roopSize - 1);
 		}
 		else {
+#endif
 			OutputString("\rChecking sectors (LBA) %6lu/%6lu", i, roopSize - 1);
+#ifdef _WIN32
 		}
+#endif
 	}
 	OutputString("\n");
 
+#ifdef _WIN32
 	INT nonZeroSyncIndexStart = 0;
 	INT nonZeroSyncIndexEnd = (INT)roopSize - 1;
-
 	if (execType == checkex) {
 		for (INT i = 0; i < (INT)roopSize; ++i, ++nonZeroSyncIndexStart) {
 			if (errStruct.zeroSyncSectorNum[i] == 0xFFFFFFFF)
@@ -636,6 +658,7 @@ INT handleCheckOrFix(
 			}
 		}
 	}
+#endif
 	if (errStruct.cnt_SectorFilled55) {
 		OutputLog(standardOut | file
 			, "[ERROR] Number of sector(s) where 2336 byte is all 0x55: %d\n", errStruct.cnt_SectorFilled55);
@@ -732,6 +755,7 @@ INT handleCheckOrFix(
 		OutputLog(standardOut | file,
 			"[INFO] Number of sector(s) where sync(0x00 - 0x0c) is zero: %d\n", errStruct.cnt_SectorTypeZeroSync);
 		OutputFile("\tSector: ");
+#ifdef _WIN32
 		if (execType == checkex) {
 			for (INT i = nonZeroSyncIndexStart; i <= nonZeroSyncIndexEnd; ++i) {
 				if (errStruct.zeroSyncSectorNum[i] != 0xFFFFFFFF) {
@@ -740,10 +764,13 @@ INT handleCheckOrFix(
 			}
 		}
 		else {
+#endif
 			for (INT i = 0; i < errStruct.cnt_SectorTypeZeroSync; i++) {
 				OutputFile("%ld, ", errStruct.zeroSyncSectorNum[i]);
 			}
+#ifdef _WIN32
 		}
+#endif
 		OutputFile("\n");
 	}
 	if (fpSub && errStruct.cnt_SectorTypeZeroSyncPregap) {
@@ -814,7 +841,7 @@ INT handleCheckOrFix(
 	fclose(fpLog);
 	return EXIT_SUCCESS;
 }
-
+#ifdef _WIN32
 INT handleCheckEx(
 	LPCSTR filePath
 ) {
@@ -908,7 +935,7 @@ INT handleCheckEx(
 	}
 	return retVal;
 }
-
+#endif
 INT handleWrite(
 	LPCSTR filePath
 ) {
@@ -954,8 +981,10 @@ VOID printUsage(
 		"Usage\n"
 		"\tcheck <InFileName>\n"
 		"\t\tValidate user data of 2048 byte per sector\n"
+#ifdef _WIN32
 		"\tcheckex <CueFile>\n"
 		"\t\tValidate user data of 2048 byte per sector (alternate)\n"
+#endif
 		"\tfix <InOutFileName>\n"
 		"\t\tReplace data of 2336 byte to '0x55' except header\n"
 		"\tfix <InOutFileName> <startLBA> <endLBA>\n"
@@ -978,9 +1007,11 @@ INT checkArg(
 	if (argc == 3 && (!strcmp(argv[1], "check"))) {
 		*pExecType = check;
 	}
+#ifdef _WIN32
 	else if (argc == 3 && (!strcmp(argv[1], "checkex"))) {
 		*pExecType = checkex;
 	}
+#endif
 	else if (argc == 3 && (!strcmp(argv[1], "fix"))) {
 		*pExecType = fix;
 	}
@@ -1028,7 +1059,7 @@ INT checkArg(
 			OutputErrorString("[%s] is invalid argument. Please input integer.\n", endptr);
 			return FALSE;
 		}
-		*pExecType = write;
+		*pExecType = _write;
 	}
 	else {
 		OutputErrorString("argc: %d\n", argc);
@@ -1058,10 +1089,12 @@ int main(int argc, char** argv)
 		retVal = handleCheckOrFix(argv[2], execType
 			, check_fix_mode_s_startLBA, check_fix_mode_s_endLBA, TrackModeUnknown, logFilePath.c_str());
 	}
+#ifdef _WIN32
 	else if (execType == checkex) {
 		retVal = handleCheckEx(argv[2]);
 	}
-	else if (execType == write) {
+#endif
+	else if (execType == _write) {
 		retVal = handleWrite(argv[2]);
 	}
 	return retVal;

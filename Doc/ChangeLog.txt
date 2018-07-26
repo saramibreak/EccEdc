@@ -67,3 +67,6 @@ added: Distinguish between zero sync and zero sync of the pregap sector
 changed: Visual Studio 2015 to 2017
 changed: MultiThreaded to MultiThreadedDLL
 improved: mode 2 (for PS2 unlicensed disc)
+
+*2018-07-26
+added: Linux build

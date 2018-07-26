@@ -45,7 +45,7 @@ typedef enum _EXEC_TYPE {
 	check,
 	checkex,
 	fix,
-	write
+	_write
 } EXEC_TYPE, *PEXEC_TYPE;
 
 typedef enum _LOG_TYPE {
