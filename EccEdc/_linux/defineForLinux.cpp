@@ -20,7 +20,16 @@ void _splitpath(const char* Path, char* Drive, char* Directory, char* Filename, 
 	// no drives available in linux .
 	// extensions are not common in linux
 	// but considered anyway
-	Drive = NULL;
+	if (Drive != NULL) {
+		if (*CopyOfPath == '/') {
+			strncpy(Drive, Path, 1);
+			CopyOfPath++;
+			Counter++;
+		}
+		else {
+			Drive = NULL;
+		}
+	}
 
 	while (*CopyOfPath != '\0')
 	{
@@ -42,37 +51,45 @@ void _splitpath(const char* Path, char* Drive, char* Directory, char* Filename, 
 	if (Directory != NULL) {
 		// directory is the first part of the path until the
 		// last slash appears
-		strncpy(Directory, Path, Last);
+		if (Drive) {
+			strncpy(Directory, Path + 1, Last - 1);
+		}
+		else {
+			strncpy(Directory, Path, Last);
+		}
 		// strncpy doesnt add a '\0'
 		Directory[Last] = '\0';
 	}
+	char ext[256] = { 0 };
+	char* pExt = ext;
 	if (Filename != NULL) {
 		// Filename is the part behind the last slahs
 		strcpy(Filename, CopyOfPath -= Rest);
+		strncpy(pExt, Filename, strlen(Filename));
 		PathRemoveExtension(Filename);
 	}
 	if (Extension != NULL) {
 		// get extension if there is any
-		while (*Filename != '\0')
+		while (*pExt != '\0')
 		{
 			// the part behind the point is called extension in windows systems
 			// at least that is what i thought apperantly the '.' is used as part
 			// of the extension too .
-			if (*Filename == '.')
+			if (*pExt == '.')
 			{
-				while (*Filename != '\0')
+				while (*pExt != '\0')
 				{
 //					*Extension = *Filename;
-					strncpy(Extension, Filename, 4);
-					*Filename = '\0';
+					strncpy(Extension, pExt, 4);
+//					*Filename = '\0';
 					break;
 //					Extension++;
 //					Filename++;
 				}
 			}
-			if (*Filename != '\0')
+			if (*pExt != '\0')
 			{
-				Filename++;
+				pExt++;
 			}
 		}
 //		*Extension = '\0';

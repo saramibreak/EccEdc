@@ -73,6 +73,8 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
       <ForcedIncludeFiles>_linux/defineForLinux.h</ForcedIncludeFiles>
+      <CAdditionalWarning>extra;%(CAdditionalWarning)</CAdditionalWarning>
+      <CppAdditionalWarning>extra;%(CppAdditionalWarning)</CppAdditionalWarning>
     </ClCompile>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

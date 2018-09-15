@@ -70,3 +70,9 @@ improved: mode 2 (for PS2 unlicensed disc)
 
 *2018-07-26
 added: Linux build
+
+*2018-09-15
+added: makefile for linux
+added: support mode 0x00 of CD data track
+added: 4th sector from last of SecuROM is recognized as error
+changed: set to invalid mode except 0x00 or 0x01 or 0x02

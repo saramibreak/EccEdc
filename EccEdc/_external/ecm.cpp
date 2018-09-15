@@ -19,6 +19,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "ecm.h"
+#pragma GCC diagnostic ignored "-Wconversion"
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -250,7 +251,29 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 		if (sector[0x000] == 0x00 && sector[0x001] == 0xFF && sector[0x002] == 0xFF && sector[0x003] == 0xFF &&
 			sector[0x004] == 0xFF && sector[0x005] == 0xFF && sector[0x006] == 0xFF && sector[0x007] == 0xFF &&
 			sector[0x008] == 0xFF && sector[0x009] == 0xFF && sector[0x00A] == 0xFF && sector[0x00B] == 0x00) { // sync (12 bytes)
-			if (sector[0x00F] == 0x01) { // mode (1 byte)
+			if ((sector[0x00F] & 0x0f) == 0x00) { // mode (1 byte)
+				if (trackMode) {
+					*trackMode = TrackMode0;
+				}
+				int zeroCnt = 0;
+				for (int i = 0x10; i < 0x930; i++) {
+					if (sector[i] == 0) {
+						zeroCnt++;
+					}
+				}
+				if (zeroCnt == 0x920) {
+					if (sector[0x00F] == 0x00) {
+						return SectorTypeMode0; // Mode 0
+					}
+					else {
+						return SectorTypeInvalidMode0;
+					}
+				}
+				else {
+					return SectorTypeMode0NotAllZero;
+				}
+			}
+			else if ((sector[0x00F] & 0x0f) == 0x01) { // mode (1 byte)
 				if (trackMode) {
 					*trackMode = TrackMode1;
 				}
@@ -261,7 +284,12 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 						//
 						// Might be Mode 1
 						//
-						return SectorTypeMode1; // Mode 1
+						if (sector[0x00F] == 0x01) {
+							return SectorTypeMode1; // Mode 1
+						}
+						else {
+							return SectorTypeInvalidMode1;
+						}
 					}
 					else {
 						return SectorTypeMode1ReservedNotZero; // Mode 1 but 0x814-81B isn't zero
@@ -271,7 +299,7 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 					return SectorTypeMode1BadEcc; // Mode 1 probably protect (safedisc etc)
 				}
 			}
-			else if (sector[0x0F] == 0x02) { // mode (1 byte)
+			else if ((sector[0x0F] & 0x0f) == 0x02) { // mode (1 byte)
 				if (trackMode) {
 					*trackMode = TrackMode2;
 				}
@@ -282,7 +310,12 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 					edc_compute(0, sector + 0x10, 0x808) == get32lsb(sector + 0x10 + 0x808)) {
 					if (sector[0x10] == sector[0x14] && sector[0x11] == sector[0x15] &&
 						sector[0x12] == sector[0x16] && sector[0x13] == sector[0x17]) { // flags (4 bytes) versus redundant copy
-						return SectorTypeMode2Form1; // Mode 2, Form 1
+						if (sector[0x00F] == 0x02) {
+							return SectorTypeMode2Form1; // Mode 2, Form 1
+						}
+						else {
+							return SectorTypeInvalidMode2Form1;
+						}
 					}
 					else {
 						return SectorTypeMode2Form1SubheaderNotSame;
@@ -294,7 +327,12 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 				else if (edc_compute(0, sector + 0x10, 0x91C) == get32lsb(sector + 0x10 + 0x91C)) {
 					if (sector[0x10] == sector[0x14] && sector[0x11] == sector[0x15] &&
 						sector[0x12] == sector[0x16] && sector[0x13] == sector[0x17]) { // flags (4 bytes) versus redundant copy
-						return SectorTypeMode2Form2; // Mode 2, Form 2
+						if (sector[0x00F] == 0x02) {
+							return SectorTypeMode2Form2; // Mode 2, Form 2
+						}
+						else {
+							return SectorTypeInvalidMode2Form2;
+						}
 					}
 					else {
 						return SectorTypeMode2Form2SubheaderNotSame;
@@ -303,7 +341,12 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 				else {
 					if (sector[0x10] == sector[0x14] && sector[0x11] == sector[0x15] &&
 						sector[0x12] == sector[0x16] && sector[0x13] == sector[0x17]) { // flags (4 bytes) versus redundant copy
-						return SectorTypeMode2; // Mode 2, No EDC (for PlayStation)
+						if (sector[0x00F] == 0x02) {
+							return SectorTypeMode2; // Mode 2, No EDC (for PlayStation)
+						}
+						else {
+							return SectorTypeInvalidMode2;
+						}
 					}
 					else {
 						return SectorTypeMode2SubheaderNotSame;
@@ -311,34 +354,10 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 				}
 			}
 			else {
-				if (ecc_checksector(sector + 0xC, sector + 0x10, sector + 0x81C) &&
-					edc_compute(0, sector, 0x810) == get32lsb(sector + 0x810)) {
-					if (trackMode) {
-						*trackMode = TrackMode1;
-					}
-					if (sector[0x814] == 0x00 && sector[0x815] == 0x00 && sector[0x816] == 0x00 && sector[0x817] == 0x00 &&
-						sector[0x818] == 0x00 && sector[0x819] == 0x00 && sector[0x81A] == 0x00 && sector[0x81B] == 0x00) { // reserved (8 bytes)
-						return SectorTypeMode1; // Mode unknown but regard as mode 1
-					}
-					else {
-						return SectorTypeMode1ReservedNotZero; // Mode 1 but 0x814-81B isn't zero
-					}
+				if (trackMode) {
+					*trackMode = TrackModeUnknown;
 				}
-				else {
-					if (sector[0x814] == 0x00 && sector[0x815] == 0x00 && sector[0x816] == 0x00 && sector[0x817] == 0x00 &&
-						sector[0x818] == 0x00 && sector[0x819] == 0x00 && sector[0x81A] == 0x00 && sector[0x81B] == 0x00) { // reserved (8 bytes)
-						if (trackMode) {
-							*trackMode = TrackMode1;
-						}
-						return SectorTypeMode1BadEcc; // Mode unknown but regard as mode 1
-					}
-					else {
-						if (trackMode) {
-							*trackMode = TrackModeUnknown;
-						}
-						return SectorTypeUnknownMode;
-					}
-				}
+				return SectorTypeUnknownMode;
 			}
 		}
 		else if (sector[0x000] || sector[0x001] || sector[0x002] || sector[0x003] ||

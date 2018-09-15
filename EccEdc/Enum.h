@@ -19,24 +19,32 @@
 typedef enum _SectorType {
 	// Correct
 	SectorTypeNothing = 0,
-	SectorTypeMode1 = 1,
-	SectorTypeMode2Form1 = 2,
-	SectorTypeMode2Form2 = 3,
-	SectorTypeMode2 = 4,
-	// Error
-	SectorTypeMode1BadEcc = -1,
-	SectorTypeMode1ReservedNotZero = -2,
-	SectorTypeMode2Form1SubheaderNotSame = -3,
-	SectorTypeMode2Form2SubheaderNotSame = -4,
-	SectorTypeMode2SubheaderNotSame = -5,
-	SectorTypeNonZeroInvalidSync = -6,
-	SectorTypeZeroSync = -7,
-	SectorTypeUnknownMode = -8,
+	SectorTypeMode0 = 1,
+	SectorTypeMode1 = 2,
+	SectorTypeMode2Form1 = 3,
+	SectorTypeMode2Form2 = 4,
+	SectorTypeMode2 = 5,
+	// Error or Warning
+	SectorTypeMode0NotAllZero = -1,
+	SectorTypeMode1BadEcc = -2,
+	SectorTypeMode1ReservedNotZero = -3,
+	SectorTypeMode2Form1SubheaderNotSame = -4,
+	SectorTypeMode2Form2SubheaderNotSame = -5,
+	SectorTypeMode2SubheaderNotSame = -6,
+	SectorTypeNonZeroInvalidSync = -7,
+	SectorTypeZeroSync = -8,
+	SectorTypeInvalidMode0 = -9,
+	SectorTypeInvalidMode1 = -10,
+	SectorTypeInvalidMode2Form1 = -11,
+	SectorTypeInvalidMode2Form2 = -12,
+	SectorTypeInvalidMode2 = -13,
+	SectorTypeUnknownMode = -14,
 } SectorType;
 
 typedef enum _TrackMode {
 	TrackModeUnknown,
 	TrackModeAudio,
+	TrackMode0,
 	TrackMode1,
 	TrackMode2,
 } TrackMode;
