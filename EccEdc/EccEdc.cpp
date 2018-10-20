@@ -168,6 +168,14 @@ LONG GetFileSize(
 	return lFileSize;
 }
 
+INT MSFtoLBA(
+	BYTE byMinute,
+	BYTE bySecond,
+	BYTE byFrame
+) {
+	return (byMinute * 60 + bySecond) * 75 + byFrame;
+}
+
 VOID LBAtoMSF(
 	INT nLBA,
 	LPBYTE byMinute,
@@ -179,6 +187,12 @@ VOID LBAtoMSF(
 	*bySecond = (BYTE)(nLBA % 60);
 	nLBA /= 60;
 	*byMinute = (BYTE)(nLBA);
+}
+
+BYTE BcdToDec(
+	BYTE bySrc
+) {
+	return (BYTE)(((bySrc >> 4) & 0x0f) * 10 + (bySrc & 0x0f));
 }
 
 BYTE DecToBcd(
@@ -643,6 +657,8 @@ INT handleCheckOrFix(
 	}
 
 	BYTE prevMode = 0;
+	INT nFirstLBA = 0;
+	INT nLBA = 0;
 	for (DWORD i = 0; i < roopSize; i++, j++) {
 #ifdef _WIN32
 		if (execType == checkex) {
@@ -650,14 +666,26 @@ INT handleCheckOrFix(
 		}
 #endif
 		fread(buf, sizeof(BYTE), sizeof(buf), fp);
+		if (i == 0) {
+			nFirstLBA = MSFtoLBA(BcdToDec(buf[12]), BcdToDec(buf[13]), BcdToDec(buf[14]));
+		}
 		if (fpSub) {
 			fread(subbuf, sizeof(BYTE), sizeof(subbuf), fpSub);
 			BYTE byCtl = (BYTE)((subbuf[12] >> 4) & 0x0f);
 			if (byCtl & 0x04) {
-				handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, i, j, TRUE, subbuf[14]);
+				if ((buf[13] & 0x80) == 0x80) {
+					nLBA = MSFtoLBA(BcdToDec(buf[12] ^ 0x01), BcdToDec(buf[13] ^ 0x80), BcdToDec(buf[14])) - 150;
+				}
+				else {
+					nLBA = MSFtoLBA(BcdToDec(buf[12]), BcdToDec(buf[13]), BcdToDec(buf[14])) - 150;
+				}
+				handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, (DWORD)nLBA, j, TRUE, subbuf[14]);
 			}
 			else {
-				OutputFileWithLba("audio\n", i, i);
+				if (i == 0) {
+					nFirstLBA = startLBA + 150;
+				}
+				OutputFileWithLba("audio\n", nFirstLBA - 150 + i, nFirstLBA - 150 + i);
 			}
 		}
 		else {
