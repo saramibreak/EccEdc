@@ -263,14 +263,14 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 				}
 				if (zeroCnt == 0x920) {
 					if (sector[0x00F] == 0x00) {
-						return SectorTypeMode0; // Mode 0
+						return Mode0; // Mode 0
 					}
 					else {
-						return SectorTypeInvalidMode0;
+						return InvalidMode0;
 					}
 				}
 				else {
-					return SectorTypeMode0NotAllZero;
+					return Mode0NotAllZero;
 				}
 			}
 			else if ((sector[0x00F] & 0x0f) == 0x01) { // mode (1 byte)
@@ -285,18 +285,18 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 						// Might be Mode 1
 						//
 						if (sector[0x00F] == 0x01) {
-							return SectorTypeMode1; // Mode 1
+							return Mode1; // Mode 1
 						}
 						else {
-							return SectorTypeInvalidMode1;
+							return InvalidMode1;
 						}
 					}
 					else {
-						return SectorTypeMode1ReservedNotZero; // Mode 1 but 0x814-81B isn't zero
+						return Mode1ReservedNotZero; // Mode 1 but 0x814-81B isn't zero
 					}
 				}
 				else {
-					return SectorTypeMode1BadEcc; // Mode 1 probably protect (safedisc etc)
+					return Mode1BadEcc; // Mode 1 probably protect (safedisc etc)
 				}
 			}
 			else if ((sector[0x0F] & 0x0f) == 0x02) { // mode (1 byte)
@@ -311,14 +311,14 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 					if (sector[0x10] == sector[0x14] && sector[0x11] == sector[0x15] &&
 						sector[0x12] == sector[0x16] && sector[0x13] == sector[0x17]) { // flags (4 bytes) versus redundant copy
 						if (sector[0x00F] == 0x02) {
-							return SectorTypeMode2Form1; // Mode 2, Form 1
+							return Mode2Form1; // Mode 2, Form 1
 						}
 						else {
-							return SectorTypeInvalidMode2Form1;
+							return InvalidMode2Form1;
 						}
 					}
 					else {
-						return SectorTypeMode2Form1SubheaderNotSame;
+						return Mode2Form1SubheaderNotSame;
 					}
 				}
 				//
@@ -328,28 +328,28 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 					if (sector[0x10] == sector[0x14] && sector[0x11] == sector[0x15] &&
 						sector[0x12] == sector[0x16] && sector[0x13] == sector[0x17]) { // flags (4 bytes) versus redundant copy
 						if (sector[0x00F] == 0x02) {
-							return SectorTypeMode2Form2; // Mode 2, Form 2
+							return Mode2Form2; // Mode 2, Form 2
 						}
 						else {
-							return SectorTypeInvalidMode2Form2;
+							return InvalidMode2Form2;
 						}
 					}
 					else {
-						return SectorTypeMode2Form2SubheaderNotSame;
+						return Mode2Form2SubheaderNotSame;
 					}
 				}
 				else {
 					if (sector[0x10] == sector[0x14] && sector[0x11] == sector[0x15] &&
 						sector[0x12] == sector[0x16] && sector[0x13] == sector[0x17]) { // flags (4 bytes) versus redundant copy
 						if (sector[0x00F] == 0x02) {
-							return SectorTypeMode2; // Mode 2, No EDC (for PlayStation)
+							return Mode2; // Mode 2, No EDC (for PlayStation)
 						}
 						else {
-							return SectorTypeInvalidMode2;
+							return InvalidMode2;
 						}
 					}
 					else {
-						return SectorTypeMode2SubheaderNotSame;
+						return Mode2SubheaderNotSame;
 					}
 				}
 			}
@@ -357,24 +357,24 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 				if (trackMode) {
 					*trackMode = TrackModeUnknown;
 				}
-				return SectorTypeUnknownMode;
+				return UnknownMode;
 			}
 		}
 		else if (sector[0x000] || sector[0x001] || sector[0x002] || sector[0x003] ||
 			sector[0x004] || sector[0x005] || sector[0x006] || sector[0x007] ||
 			sector[0x008] || sector[0x009] || sector[0x00A] || sector[0x00B] ||
 			sector[0x00C] || sector[0x00D] || sector[0x00E] || sector[0x00F]) { // Fix for invalid scrambled sector in data track
-			return SectorTypeNonZeroInvalidSync;
+			return NonZeroInvalidSync;
 		}
 		else {
-			return SectorTypeZeroSync;
+			return ZeroSync;
 		}
 	}
 
 	//
 	// Nothing
 	//
-	return SectorTypeNothing;
+	return Nothing;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -401,7 +401,7 @@ bool reconstruct_sector(
 	sector[0x00A] = 0xFF;
 	sector[0x00B] = 0x00;
 
-	if (type == SectorTypeMode1) {
+	if (type == Mode1) {
 		//
 		// Mode
 		//
@@ -418,7 +418,7 @@ bool reconstruct_sector(
 		sector[0x81A] = 0x00;
 		sector[0x81B] = 0x00;
 	}
-	else if (type == SectorTypeMode2Form1 || type == SectorTypeMode2Form2) {
+	else if (type == Mode2Form1 || type == Mode2Form2) {
 		//
 		// Mode
 		//
@@ -438,13 +438,13 @@ bool reconstruct_sector(
 	//
 	// Compute EDC
 	//
-	if (type == SectorTypeMode1) {
+	if (type == Mode1) {
 		put32lsb(sector + 0x810, edc_compute(0, sector, 0x810));
 	}
-	else if (type == SectorTypeMode2Form1) {
+	else if (type == Mode2Form1) {
 		put32lsb(sector + 0x818, edc_compute(0, sector + 0x10, 0x808));
 	}
-	else if (type == SectorTypeMode2Form2) {
+	else if (type == Mode2Form2) {
 		put32lsb(sector + 0x92C, edc_compute(0, sector + 0x10, 0x91C));
 	}
 	else {
@@ -454,10 +454,10 @@ bool reconstruct_sector(
 	//
 	// Compute ECC
 	//
-	if (type == SectorTypeMode1) {
+	if (type == Mode1) {
 		ecc_writesector(sector + 0xC, sector + 0x10, sector + 0x81C);
 	} 
-	else if (type == SectorTypeMode2Form1) {
+	else if (type == Mode2Form1) {
 		ecc_writesector(zeroaddress, sector + 0x10, sector + 0x81C);
 	} 
 	else {

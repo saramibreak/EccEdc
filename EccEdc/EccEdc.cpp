@@ -26,37 +26,39 @@ static DWORD check_fix_mode_s_endLBA = 0;
 static BYTE write_mode_s_Minute = 0;
 static BYTE write_mode_s_Second = 0;
 static BYTE write_mode_s_Frame = 0;
-static SectorType write_mode_s_Mode = SectorTypeNothing;
+static SectorType write_mode_s_Mode = Nothing;
 static DWORD write_mode_s_MaxRoop = 0;
 static FILE *fpLog;
 
 typedef struct _ERROR_STRUCT {
+	INT cnt_BadMsf = 0;
 	INT cnt_SectorFilled55 = 0;
-	INT cnt_SectorTypeMode0NotAllZero = 0;
-	INT cnt_SectorTypeMode1BadEcc = 0;
-	INT cnt_SectorTypeMode1ReservedNotZero = 0;
-	INT cnt_SectorTypeMode2Form1SubheaderNotSame = 0;
-	INT cnt_SectorTypeMode2Form2SubheaderNotSame = 0;
-	INT cnt_SectorTypeMode2SubheaderNotSame = 0;
-	INT cnt_SectorTypeMode2 = 0;
-	INT cnt_SectorTypeInvalidMode = 0;
-	INT cnt_SectorTypeNonZeroInvalidSync = 0; // For VOB
-	INT cnt_SectorTypeUnknownMode = 0; // For SecuROM
-	INT cnt_SectorTypeZeroSync = 0;
-	INT cnt_SectorTypeZeroSyncPregap = 0;
-	DWORD* notAllZeroSectorNum;
-	DWORD* errorSectorNum;
+	INT cnt_Mode0NotAllZero = 0;
+	INT cnt_Mode1BadEcc = 0;
+	INT cnt_Mode1ReservedNotZero = 0;
+	INT cnt_Mode2Form1SubheaderNotSame = 0;
+	INT cnt_Mode2Form2SubheaderNotSame = 0;
+	INT cnt_Mode2SubheaderNotSame = 0;
+	INT cnt_Mode2 = 0;
+	INT cnt_InvalidMode = 0;
+	INT cnt_NonZeroInvalidSync = 0; // For VOB
+	INT cnt_UnknownMode = 0; // For SecuROM
+	INT cnt_ZeroSync = 0;
+	INT cnt_ZeroSyncPregap = 0;
+	DWORD* badMsfNum;
+	DWORD* notAllZeroNum;
+	DWORD* errorNum;
 	DWORD* noMatchLBANum;
-	DWORD* reservedSectorNum;
-	DWORD* noEDCSectorNum;
-	DWORD* mode2Form1SectorNum;
-	DWORD* mode2Form2SectorNum;
-	DWORD* mode2SectorNum;
-	DWORD* invalidModeSectorNum;
-	DWORD* nonZeroInvalidSyncSectorNum;
-	DWORD* zeroSyncSectorNum;
-	DWORD* zeroSyncPregapSectorNum;
-	DWORD* unknownModeSectorNum;
+	DWORD* reservedNum;
+	DWORD* noEDCNum;
+	DWORD* mode2Form1Num;
+	DWORD* mode2Form2Num;
+	DWORD* mode2Num;
+	DWORD* invalidModeNum;
+	DWORD* nonZeroInvalidSyncNum;
+	DWORD* zeroSyncNum;
+	DWORD* zeroSyncPregapNum;
+	DWORD* unknownModeNum;
 } ERROR_STRUCT, *PERROR_STRUCT;
 
 #define CD_RAW_SECTOR_SIZE	(2352)
@@ -251,11 +253,15 @@ INT initCountNum(
 	PERROR_STRUCT pErrStruct,
 	size_t stAllocSize
 ) {
-	if (NULL == ((*pErrStruct).notAllZeroSectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+	if (NULL == ((*pErrStruct).badMsfNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
 	}
-	if (NULL == ((*pErrStruct).errorSectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+	if (NULL == ((*pErrStruct).notAllZeroNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
+		return FALSE;
+	}
+	if (NULL == ((*pErrStruct).errorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
 	}
@@ -263,45 +269,45 @@ INT initCountNum(
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
 	}
-	if (NULL == ((*pErrStruct).reservedSectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+	if (NULL == ((*pErrStruct).reservedNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
 	}
-	if (NULL == ((*pErrStruct).noEDCSectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+	if (NULL == ((*pErrStruct).noEDCNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
 	}
-	if (NULL == ((*pErrStruct).mode2Form1SectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+	if (NULL == ((*pErrStruct).mode2Form1Num = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
 	}
-	if (NULL == ((*pErrStruct).mode2Form2SectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+	if (NULL == ((*pErrStruct).mode2Form2Num = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
 	}
-	if (NULL == ((*pErrStruct).mode2SectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+	if (NULL == ((*pErrStruct).mode2Num = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
 	}
-	if (NULL == ((*pErrStruct).invalidModeSectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+	if (NULL == ((*pErrStruct).invalidModeNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
 	}
-	if (NULL == ((*pErrStruct).nonZeroInvalidSyncSectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+	if (NULL == ((*pErrStruct).nonZeroInvalidSyncNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
 	}
-	if (NULL == ((*pErrStruct).zeroSyncSectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+	if (NULL == ((*pErrStruct).zeroSyncNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
 	}
-	memset((*pErrStruct).zeroSyncSectorNum, 0xFF, stAllocSize * sizeof(DWORD));
+	memset((*pErrStruct).zeroSyncNum, 0xFF, stAllocSize * sizeof(DWORD));
 
-	if (NULL == ((*pErrStruct).zeroSyncPregapSectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+	if (NULL == ((*pErrStruct).zeroSyncPregapNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
 	}
-	if (NULL == ((*pErrStruct).unknownModeSectorNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
+	if (NULL == ((*pErrStruct).unknownModeNum = (DWORD*)calloc(stAllocSize, sizeof(DWORD)))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		return FALSE;
 	}
@@ -311,19 +317,20 @@ INT initCountNum(
 VOID terminateCountNum(
 	PERROR_STRUCT pErrStruct
 ) {
-	FreeAndNull((*pErrStruct).notAllZeroSectorNum);
-	FreeAndNull((*pErrStruct).errorSectorNum);
+	FreeAndNull((*pErrStruct).badMsfNum);
+	FreeAndNull((*pErrStruct).notAllZeroNum);
+	FreeAndNull((*pErrStruct).errorNum);
 	FreeAndNull((*pErrStruct).noMatchLBANum);
-	FreeAndNull((*pErrStruct).reservedSectorNum);
-	FreeAndNull((*pErrStruct).noEDCSectorNum);
-	FreeAndNull((*pErrStruct).mode2Form1SectorNum);
-	FreeAndNull((*pErrStruct).mode2Form2SectorNum);
-	FreeAndNull((*pErrStruct).mode2SectorNum);
-	FreeAndNull((*pErrStruct).invalidModeSectorNum);
-	FreeAndNull((*pErrStruct).nonZeroInvalidSyncSectorNum);
-	FreeAndNull((*pErrStruct).zeroSyncSectorNum);
-	FreeAndNull((*pErrStruct).zeroSyncPregapSectorNum);
-	FreeAndNull((*pErrStruct).unknownModeSectorNum);
+	FreeAndNull((*pErrStruct).reservedNum);
+	FreeAndNull((*pErrStruct).noEDCNum);
+	FreeAndNull((*pErrStruct).mode2Form1Num);
+	FreeAndNull((*pErrStruct).mode2Form2Num);
+	FreeAndNull((*pErrStruct).mode2Num);
+	FreeAndNull((*pErrStruct).invalidModeNum);
+	FreeAndNull((*pErrStruct).nonZeroInvalidSyncNum);
+	FreeAndNull((*pErrStruct).zeroSyncNum);
+	FreeAndNull((*pErrStruct).zeroSyncPregapNum);
+	FreeAndNull((*pErrStruct).unknownModeNum);
 }
 
 INT handleCheckDetail(
@@ -335,11 +342,11 @@ INT handleCheckDetail(
 	DWORD roopCnt,
 	DWORD roopCnt2,
 	BOOL bSub,
-	BYTE byIdx
+	LPBYTE subBuf
 ) {
 	if (IsErrorSector(buf)) {
 		OutputFileWithLbaMsf("2336 bytes have been already replaced at 0x55\n", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
-		pErrStruct->errorSectorNum[pErrStruct->cnt_SectorFilled55++] = roopCnt;
+		pErrStruct->errorNum[pErrStruct->cnt_SectorFilled55++] = roopCnt;
 		return TRUE;
 	}
 
@@ -351,40 +358,44 @@ INT handleCheckDetail(
 		skipTrackModeCheck = FALSE;
 	}
 
-	if (sectorType == SectorTypeMode0 || sectorType == SectorTypeMode0NotAllZero) {
+	BYTE byCtl = (BYTE)((subBuf[12] >> 4) & 0x0f);
+	BYTE byIdx = subBuf[14];
+
+	if (sectorType == Mode0 || sectorType == InvalidMode0 || sectorType == Mode0NotAllZero) {
 		OutputFileWithLbaMsf("mode 0", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
-		if (sectorType == SectorTypeMode0) {
+		if (sectorType == Mode0) {
 			OutputFile("\n");
 		}
-		else if (sectorType == SectorTypeInvalidMode0) {
+		else if (sectorType == InvalidMode0) {
 			OutputFile(" Invalid mode: [%02x]\n", buf[15]);
-			pErrStruct->invalidModeSectorNum[pErrStruct->cnt_SectorTypeInvalidMode++] = roopCnt;
+			pErrStruct->invalidModeNum[pErrStruct->cnt_InvalidMode++] = roopCnt;
 		}
 		else {
 			OutputFile(" Not all user data zero\n");
-			pErrStruct->notAllZeroSectorNum[pErrStruct->cnt_SectorTypeMode0NotAllZero++] = roopCnt;
+			pErrStruct->notAllZeroNum[pErrStruct->cnt_Mode0NotAllZero++] = roopCnt;
 		}
 	}
-	else if (sectorType == SectorTypeMode1 || sectorType == SectorTypeMode1BadEcc || sectorType == SectorTypeMode1ReservedNotZero) {
+	else if (sectorType == Mode1 || sectorType == InvalidMode1 ||
+		sectorType == Mode1BadEcc || sectorType == Mode1ReservedNotZero) {
 		OutputFileWithLbaMsf("mode 1", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
-		if (sectorType == SectorTypeMode1) {
+		if (sectorType == Mode1) {
 			OutputFile("\n");
 		}
-		else if (sectorType == SectorTypeInvalidMode1) {
+		else if (sectorType == InvalidMode1) {
 			OutputFile(" Invalid mode: [%02x]\n", buf[15]);
-			pErrStruct->invalidModeSectorNum[pErrStruct->cnt_SectorTypeInvalidMode++] = roopCnt;
+			pErrStruct->invalidModeNum[pErrStruct->cnt_InvalidMode++] = roopCnt;
 		}
-		else if (sectorType == SectorTypeMode1BadEcc) {
+		else if (sectorType == Mode1BadEcc) {
 			OutputFile(" User data vs. ecc/edc doesn't match\n");
 
-			pErrStruct->noMatchLBANum[pErrStruct->cnt_SectorTypeMode1BadEcc++] = roopCnt;
+			pErrStruct->noMatchLBANum[pErrStruct->cnt_Mode1BadEcc++] = roopCnt;
 		}
-		else if (sectorType == SectorTypeMode1ReservedNotZero) {
+		else if (sectorType == Mode1ReservedNotZero) {
 			if (buf[0x814] == 0x55 && buf[0x815] == 0x55 && buf[0x816] == 0x55 && buf[0x817] == 0x55 &&
 				buf[0x818] == 0x55 && buf[0x819] == 0x55 && buf[0x81a] == 0x55 && buf[0x81b] == 0x55) {
 				OutputFile(" This sector have been already replaced at 0x55 but it's incompletely\n");
 
-				pErrStruct->noMatchLBANum[pErrStruct->cnt_SectorTypeMode1BadEcc++] = roopCnt;
+				pErrStruct->noMatchLBANum[pErrStruct->cnt_Mode1BadEcc++] = roopCnt;
 			}
 			else {
 				OutputFile(
@@ -394,52 +405,54 @@ INT handleCheckDetail(
 					, buf[0x814], buf[0x815], buf[0x816], buf[0x817]
 					, buf[0x818], buf[0x819], buf[0x81a], buf[0x81b]);
 
-				pErrStruct->reservedSectorNum[pErrStruct->cnt_SectorTypeMode1ReservedNotZero++] = roopCnt;
+				pErrStruct->reservedNum[pErrStruct->cnt_Mode1ReservedNotZero++] = roopCnt;
 			}
 		}
 	}
-	else if (sectorType == SectorTypeMode2Form1 || sectorType == SectorTypeMode2Form2 ||
-		sectorType == SectorTypeMode2 || sectorType == SectorTypeMode2Form1SubheaderNotSame ||
-		sectorType == SectorTypeMode2Form2SubheaderNotSame || sectorType == SectorTypeMode2SubheaderNotSame) {
+	else if (sectorType == Mode2Form1 || sectorType == InvalidMode2Form1 ||
+		sectorType == Mode2Form2 || sectorType == InvalidMode2Form2 ||
+		sectorType == Mode2 || sectorType == InvalidMode2 ||
+		sectorType == Mode2Form1SubheaderNotSame ||
+		sectorType == Mode2Form2SubheaderNotSame || sectorType == Mode2SubheaderNotSame) {
 		BOOL bNoEdc = FALSE;
 
 		OutputFileWithLbaMsf("mode 2 ", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
-		if (sectorType == SectorTypeMode2Form1) {
+		if (sectorType == Mode2Form1) {
 			OutputFile("form 1, ");
 		}
-		else if (sectorType == SectorTypeInvalidMode2Form1) {
+		else if (sectorType == InvalidMode2Form1) {
 			OutputFile(" Invalid mode: [%02x]\n", buf[15]);
-			pErrStruct->invalidModeSectorNum[pErrStruct->cnt_SectorTypeInvalidMode++] = roopCnt;
+			pErrStruct->invalidModeNum[pErrStruct->cnt_InvalidMode++] = roopCnt;
 		}
-		else if (sectorType == SectorTypeMode2Form2) {
+		else if (sectorType == Mode2Form2) {
 			OutputFile("form 2, ");
 		}
-		else if (sectorType == SectorTypeInvalidMode2Form2) {
+		else if (sectorType == InvalidMode2Form2) {
 			OutputFile(" Invalid mode: [%02x]\n", buf[15]);
-			pErrStruct->invalidModeSectorNum[pErrStruct->cnt_SectorTypeInvalidMode++] = roopCnt;
+			pErrStruct->invalidModeNum[pErrStruct->cnt_InvalidMode++] = roopCnt;
 		}
-		else if (sectorType == SectorTypeMode2) {
+		else if (sectorType == Mode2) {
 			OutputFile("no edc, ");
 			bNoEdc = TRUE;
 		}
-		else if (sectorType == SectorTypeInvalidMode2) {
+		else if (sectorType == InvalidMode2) {
 			OutputFile(" Invalid mode: [%02x]\n", buf[15]);
-			pErrStruct->invalidModeSectorNum[pErrStruct->cnt_SectorTypeInvalidMode++] = roopCnt;
+			pErrStruct->invalidModeNum[pErrStruct->cnt_InvalidMode++] = roopCnt;
 		}
-		else if (sectorType == SectorTypeMode2Form1SubheaderNotSame ||
-			sectorType == SectorTypeMode2Form2SubheaderNotSame ||
-			sectorType == SectorTypeMode2SubheaderNotSame) {
-			if (sectorType == SectorTypeMode2Form1SubheaderNotSame) {
+		else if (sectorType == Mode2Form1SubheaderNotSame ||
+			sectorType == Mode2Form2SubheaderNotSame ||
+			sectorType == Mode2SubheaderNotSame) {
+			if (sectorType == Mode2Form1SubheaderNotSame) {
 				OutputFile("form 1, ");
-				pErrStruct->mode2Form1SectorNum[pErrStruct->cnt_SectorTypeMode2Form1SubheaderNotSame++] = roopCnt;
+				pErrStruct->mode2Form1Num[pErrStruct->cnt_Mode2Form1SubheaderNotSame++] = roopCnt;
 			}
-			else if (sectorType == SectorTypeMode2Form2SubheaderNotSame) {
+			else if (sectorType == Mode2Form2SubheaderNotSame) {
 				OutputFile("form 2, ");
-				pErrStruct->mode2Form2SectorNum[pErrStruct->cnt_SectorTypeMode2Form2SubheaderNotSame++] = roopCnt;
+				pErrStruct->mode2Form2Num[pErrStruct->cnt_Mode2Form2SubheaderNotSame++] = roopCnt;
 			}
-			else if (sectorType == SectorTypeMode2SubheaderNotSame) {
+			else if (sectorType == Mode2SubheaderNotSame) {
 				OutputFile("no edc, ");
-				pErrStruct->mode2SectorNum[pErrStruct->cnt_SectorTypeMode2SubheaderNotSame++] = roopCnt;
+				pErrStruct->mode2Num[pErrStruct->cnt_Mode2SubheaderNotSame++] = roopCnt;
 			}
 			OutputFile("Subheader isn't same."
 				" [0x10]:%#04x, [0x11]:%#04x, [0x12]:%#04x, [0x13]:%#04x,"
@@ -459,13 +472,13 @@ INT handleCheckDetail(
 		if (buf[18] & 0x20) {
 			OutputFile("Form 2, ");
 			if (bNoEdc) {
-				pErrStruct->noEDCSectorNum[pErrStruct->cnt_SectorTypeMode2++] = roopCnt;
+				pErrStruct->noEDCNum[pErrStruct->cnt_Mode2++] = roopCnt;
 			}
 		}
 		else {
 			OutputFile("Form 1, ");
 			if (bNoEdc) {
-				pErrStruct->noMatchLBANum[pErrStruct->cnt_SectorTypeMode1BadEcc++] = roopCnt;
+				pErrStruct->noMatchLBANum[pErrStruct->cnt_Mode1BadEcc++] = roopCnt;
 			}
 		}
 
@@ -541,26 +554,26 @@ INT handleCheckDetail(
 		}
 		OutputFile("\n");
 	}
-	else if (sectorType == SectorTypeUnknownMode) {
+	else if (sectorType == UnknownMode) {
 		OutputFileWithLbaMsf("unknown mode: %02x\n", roopCnt, roopCnt, buf[12], buf[13], buf[14], buf[15]);
-		pErrStruct->unknownModeSectorNum[pErrStruct->cnt_SectorTypeUnknownMode++] = roopCnt;
+		pErrStruct->unknownModeNum[pErrStruct->cnt_UnknownMode++] = roopCnt;
 	}
 	else if (!skipTrackModeCheck && trackMode != trackModeLocal) {
 		OutputFileWithLbaMsf("changed track mode: %d %d\n", roopCnt, roopCnt, buf[12], buf[13], buf[14], trackMode, trackModeLocal);
-		pErrStruct->unknownModeSectorNum[pErrStruct->cnt_SectorTypeUnknownMode++] = roopCnt;
+		pErrStruct->unknownModeNum[pErrStruct->cnt_UnknownMode++] = roopCnt;
 	}
-	else if (sectorType == SectorTypeNonZeroInvalidSync) {
+	else if (sectorType == NonZeroInvalidSync) {
 		if (bSub) {
 			OutputFileWithLbaMsf("invalid sync\n", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 		}
 		else {
 			OutputFileWithLbaMsf("audio or invalid sync\n", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 		}
-		pErrStruct->nonZeroInvalidSyncSectorNum[pErrStruct->cnt_SectorTypeNonZeroInvalidSync++] = roopCnt;
+		pErrStruct->nonZeroInvalidSyncNum[pErrStruct->cnt_NonZeroInvalidSync++] = roopCnt;
 	}
-	else if (sectorType == SectorTypeZeroSync) {
+	else if (sectorType == ZeroSync) {
 		if (bSub) {
-			if (byIdx == 0) {
+			if ((byCtl == 0 || byCtl == 2) && byIdx == 0) {
 				OutputFileWithLbaMsf("zero sync (pregap)\n", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 			}
 			else {
@@ -572,15 +585,15 @@ INT handleCheckDetail(
 		}
 #ifdef _WIN32
 		if (execType == checkex) {
-			pErrStruct->zeroSyncSectorNum[roopCnt2] = roopCnt;
+			pErrStruct->zeroSyncNum[roopCnt2] = roopCnt;
 		}
 		else {
 #endif
-			if (bSub && byIdx == 0) {
-				pErrStruct->zeroSyncPregapSectorNum[pErrStruct->cnt_SectorTypeZeroSyncPregap++] = roopCnt;
+			if (bSub && (byCtl == 0 || byCtl == 2) && byIdx == 0) {
+				pErrStruct->zeroSyncPregapNum[pErrStruct->cnt_ZeroSyncPregap++] = roopCnt;
 			}
 			else {
-				pErrStruct->zeroSyncSectorNum[pErrStruct->cnt_SectorTypeZeroSync++] = roopCnt;
+				pErrStruct->zeroSyncNum[pErrStruct->cnt_ZeroSync++] = roopCnt;
 			}
 #ifdef _WIN32
 		}
@@ -659,6 +672,8 @@ INT handleCheckOrFix(
 	BYTE prevMode = 0;
 	INT nFirstLBA = 0;
 	INT nLBA = 0;
+	INT nPrevLBA = 0;
+
 	for (DWORD i = 0; i < roopSize; i++, j++) {
 #ifdef _WIN32
 		if (execType == checkex) {
@@ -673,27 +688,40 @@ INT handleCheckOrFix(
 			fread(subbuf, sizeof(BYTE), sizeof(subbuf), fpSub);
 			BYTE byCtl = (BYTE)((subbuf[12] >> 4) & 0x0f);
 			if (byCtl & 0x04) {
+				if (nLBA > 0) {
+					nPrevLBA = nLBA;
+				}
 				if ((buf[13] & 0x80) == 0x80) {
-					nLBA = MSFtoLBA(BcdToDec(buf[12] ^ 0x01), BcdToDec(buf[13] ^ 0x80), BcdToDec(buf[14])) - 150;
+					nLBA = MSFtoLBA(BcdToDec(BYTE(buf[12] ^ 0x01)), BcdToDec(BYTE(buf[13] ^ 0x80)), BcdToDec(buf[14])) - 150;
 				}
 				else {
 					nLBA = MSFtoLBA(BcdToDec(buf[12]), BcdToDec(buf[13]), BcdToDec(buf[14])) - 150;
 				}
-				handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, (DWORD)nLBA, j, TRUE, subbuf[14]);
+
+				if (nLBA > 0 && nPrevLBA + 1 != nLBA) {
+					errStruct.badMsfNum[errStruct.cnt_BadMsf++] = i;
+				}
+				else {
+					if (nLBA == -150 && nPrevLBA != 0) {
+						// for audio sector of data track
+						nLBA = nPrevLBA + 1;
+					}
+					handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, (DWORD)nLBA, j, TRUE, subbuf);
+				}
 			}
 			else {
 				if (i == 0) {
-					nFirstLBA = startLBA + 150;
+					nFirstLBA = (INT)startLBA + 150;
 				}
 				OutputFileWithLba("audio\n", nFirstLBA - 150 + i, nFirstLBA - 150 + i);
 			}
 		}
 		else {
-			handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, i, j, FALSE, 0);
+			handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, i, j, FALSE, subbuf);
 		}
 
 		if (i == roopSize - 4 && buf[15] == 0x02 && prevMode == 0x01) {
-			errStruct.invalidModeSectorNum[errStruct.cnt_SectorTypeInvalidMode++] = i;
+			errStruct.invalidModeNum[errStruct.cnt_InvalidMode++] = i;
 		}
 		prevMode = buf[15];
 
@@ -715,12 +743,12 @@ INT handleCheckOrFix(
 	INT nonZeroSyncIndexEnd = (INT)roopSize - 1;
 	if (execType == checkex) {
 		for (INT i = 0; i < (INT)roopSize; ++i, ++nonZeroSyncIndexStart) {
-			if (errStruct.zeroSyncSectorNum[i] == 0xFFFFFFFF)
+			if (errStruct.zeroSyncNum[i] == 0xFFFFFFFF)
 				break;
 		}
 
 		for (INT i = (INT)roopSize - 1; i >= 0; --i, --nonZeroSyncIndexEnd) {
-			if (errStruct.zeroSyncSectorNum[i] == 0xFFFFFFFF)
+			if (errStruct.zeroSyncNum[i] == 0xFFFFFFFF)
 				break;
 		}
 
@@ -729,204 +757,220 @@ INT handleCheckOrFix(
 			assert(nonZeroSyncIndexStart <= nonZeroSyncIndexEnd);
 
 			for (INT i = nonZeroSyncIndexStart; i <= nonZeroSyncIndexEnd; ++i) {
-				if (errStruct.zeroSyncSectorNum[i] != 0xFFFFFFFF) {
-					errStruct.cnt_SectorTypeZeroSync++;
+				if (errStruct.zeroSyncNum[i] != 0xFFFFFFFF) {
+					errStruct.cnt_ZeroSync++;
 				}
 			}
 		}
 	}
 #endif
+	if (errStruct.cnt_BadMsf) {
+		OutputLog(standardOut | file
+			, "[ERROR] Number of sector(s) where bad MSF: %d\n", errStruct.cnt_BadMsf);
+		OutputFile("\tSector: ");
+		for (INT i = 0; i < errStruct.cnt_BadMsf; i++) {
+			OutputFile("%ld, ", errStruct.badMsfNum[i]);
+		}
+		OutputFile("\n");
+	}
+
 	if (errStruct.cnt_SectorFilled55) {
 		OutputLog(standardOut | file
 			, "[ERROR] Number of sector(s) where 2336 byte is all 0x55: %d\n", errStruct.cnt_SectorFilled55);
 		OutputFile("\tSector: ");
 		for (INT i = 0; i < errStruct.cnt_SectorFilled55; i++) {
-			OutputFile("%ld, ", errStruct.errorSectorNum[i]);
+			OutputFile("%ld, ", errStruct.errorNum[i]);
 		}
 		OutputFile("\n");
 	}
 
-	if (errStruct.cnt_SectorTypeMode0NotAllZero) {
+	if (errStruct.cnt_Mode0NotAllZero) {
 		OutputLog(standardOut | file
-			, "[ERROR] Number of sector(s) where user data doesn't all zero sector: %d\n", errStruct.cnt_SectorTypeMode0NotAllZero);
+			, "[ERROR] Number of sector(s) where user data doesn't all zero sector: %d\n", errStruct.cnt_Mode0NotAllZero);
 		OutputFile("\tSector: ");
-		for (INT i = 0; i < errStruct.cnt_SectorTypeMode0NotAllZero; i++) {
-			OutputFile("%ld, ", errStruct.notAllZeroSectorNum[i]);
+		for (INT i = 0; i < errStruct.cnt_Mode0NotAllZero; i++) {
+			OutputFile("%ld, ", errStruct.notAllZeroNum[i]);
 		}
 		OutputFile("\n");
 	}
 
-	if (errStruct.cnt_SectorTypeMode1BadEcc) {
+	if (errStruct.cnt_Mode1BadEcc) {
 		OutputLog(standardOut | file
-			, "[ERROR] Number of sector(s) where user data doesn't match the expected ECC/EDC: %d\n", errStruct.cnt_SectorTypeMode1BadEcc);
+			, "[ERROR] Number of sector(s) where user data doesn't match the expected ECC/EDC: %d\n", errStruct.cnt_Mode1BadEcc);
 		OutputFile("\tSector: ");
-		for (INT i = 0; i < errStruct.cnt_SectorTypeMode1BadEcc; i++) {
+		for (INT i = 0; i < errStruct.cnt_Mode1BadEcc; i++) {
 			OutputFile("%ld, ", errStruct.noMatchLBANum[i]);
 		}
 		OutputFile("\n");
 	}
 
-	if (errStruct.cnt_SectorTypeMode1ReservedNotZero) {
+	if (errStruct.cnt_Mode1ReservedNotZero) {
 		OutputLog(standardOut | file,
-			"[WARNING] Number of sector(s) where reserved(0x814 - 0x81b) doesn't zero: %d\n", errStruct.cnt_SectorTypeMode1ReservedNotZero);
+			"[WARNING] Number of sector(s) where reserved(0x814 - 0x81b) doesn't zero: %d\n", errStruct.cnt_Mode1ReservedNotZero);
 		OutputFile("\tSector: ");
-		for (INT i = 0; i < errStruct.cnt_SectorTypeMode1ReservedNotZero; i++) {
-			OutputFile("%ld, ", errStruct.reservedSectorNum[i]);
+		for (INT i = 0; i < errStruct.cnt_Mode1ReservedNotZero; i++) {
+			OutputFile("%ld, ", errStruct.reservedNum[i]);
 		}
 		OutputFile("\n");
 	}
 
-	if (errStruct.cnt_SectorTypeMode2) {
+	if (errStruct.cnt_Mode2) {
 		OutputLog(standardOut | file,
-			"[INFO] Number of sector(s) where EDC doesn't exist: %d\n", errStruct.cnt_SectorTypeMode2);
+			"[INFO] Number of sector(s) where EDC doesn't exist: %d\n", errStruct.cnt_Mode2);
 #if 0
 		OutputFile("\tSector: ");
-		for (INT i = 0; i < errStruct.cnt_SectorTypeMode2; i++) {
-			OutputFile("%ld, ", errStruct.noEDCSectorNum[i]);
+		for (INT i = 0; i < errStruct.cnt_Mode2; i++) {
+			OutputFile("%ld, ", errStruct.noEDCNum[i]);
 		}
 		OutputFile("\n");
 #endif
 	}
 
-	if (errStruct.cnt_SectorTypeMode2Form1SubheaderNotSame) {
+	if (errStruct.cnt_Mode2Form1SubheaderNotSame) {
 		OutputLog(standardOut | file,
-			"[WARNING] Number of sector(s) where mode2 form1 subheader(0x10 - 0x17) isn't same: %d\n", errStruct.cnt_SectorTypeMode2Form1SubheaderNotSame);
+			"[WARNING] Number of sector(s) where mode2 form1 subheader(0x10 - 0x17) isn't same: %d\n", errStruct.cnt_Mode2Form1SubheaderNotSame);
 		OutputFile("\tSector: ");
-		for (INT i = 0; i < errStruct.cnt_SectorTypeMode2Form1SubheaderNotSame; i++) {
-			OutputFile("%ld, ", errStruct.mode2Form1SectorNum[i]);
+		for (INT i = 0; i < errStruct.cnt_Mode2Form1SubheaderNotSame; i++) {
+			OutputFile("%ld, ", errStruct.mode2Form1Num[i]);
 		}
 		OutputFile("\n");
 	}
 
-	if (errStruct.cnt_SectorTypeMode2Form2SubheaderNotSame) {
+	if (errStruct.cnt_Mode2Form2SubheaderNotSame) {
 		OutputLog(standardOut | file,
-			"[WARNING] Number of sector(s) where mode2 form2 subheader(0x10 - 0x17) isn't same: %d\n", errStruct.cnt_SectorTypeMode2Form2SubheaderNotSame);
+			"[WARNING] Number of sector(s) where mode2 form2 subheader(0x10 - 0x17) isn't same: %d\n", errStruct.cnt_Mode2Form2SubheaderNotSame);
 		OutputFile("\tSector: ");
-		for (INT i = 0; i < errStruct.cnt_SectorTypeMode2Form2SubheaderNotSame; i++) {
-			OutputFile("%ld, ", errStruct.mode2Form2SectorNum[i]);
+		for (INT i = 0; i < errStruct.cnt_Mode2Form2SubheaderNotSame; i++) {
+			OutputFile("%ld, ", errStruct.mode2Form2Num[i]);
 		}
 		OutputFile("\n");
 	}
 
-	if (errStruct.cnt_SectorTypeMode2SubheaderNotSame) {
+	if (errStruct.cnt_Mode2SubheaderNotSame) {
 		OutputLog(standardOut | file,
-			"[ERROR] Number of sector(s) where mode2 NoEdc subheader(0x10 - 0x17) isn't same: %d\n", errStruct.cnt_SectorTypeMode2SubheaderNotSame);
+			"[ERROR] Number of sector(s) where mode2 NoEdc subheader(0x10 - 0x17) isn't same: %d\n", errStruct.cnt_Mode2SubheaderNotSame);
 		OutputFile("\tSector: ");
-		for (INT i = 0; i < errStruct.cnt_SectorTypeMode2SubheaderNotSame; i++) {
-			OutputFile("%ld, ", errStruct.mode2SectorNum[i]);
+		for (INT i = 0; i < errStruct.cnt_Mode2SubheaderNotSame; i++) {
+			OutputFile("%ld, ", errStruct.mode2Num[i]);
 		}
 		OutputFile("\n");
 	}
 
-	if (errStruct.cnt_SectorTypeInvalidMode) {
+	if (errStruct.cnt_InvalidMode) {
 		OutputLog(standardOut | file,
-			"[ERROR] Number of sector(s) where mode is invalid: %d\n", errStruct.cnt_SectorTypeInvalidMode);
+			"[ERROR] Number of sector(s) where mode is invalid: %d\n", errStruct.cnt_InvalidMode);
 		OutputFile("\tSector: ");
-		for (INT i = 0; i < errStruct.cnt_SectorTypeInvalidMode; i++) {
-			OutputFile("%ld, ", errStruct.invalidModeSectorNum[i]);
+		for (INT i = 0; i < errStruct.cnt_InvalidMode; i++) {
+			OutputFile("%ld, ", errStruct.invalidModeNum[i]);
 		}
 		OutputFile("\n");
 	}
 
-	if (errStruct.cnt_SectorTypeUnknownMode) {
+	if (errStruct.cnt_UnknownMode) {
 		OutputLog(standardOut | file,
-			"[ERROR] Number of sector(s) where mode(0x0f) is unknown: %d\n", errStruct.cnt_SectorTypeUnknownMode);
+			"[ERROR] Number of sector(s) where mode(0x0f) is unknown: %d\n", errStruct.cnt_UnknownMode);
 		OutputFile("\tSector: ");
-		for (INT i = 0; i < errStruct.cnt_SectorTypeUnknownMode; i++) {
-			OutputFile("%ld, ", errStruct.unknownModeSectorNum[i]);
+		for (INT i = 0; i < errStruct.cnt_UnknownMode; i++) {
+			OutputFile("%ld, ", errStruct.unknownModeNum[i]);
 		}
 		OutputFile("\n");
 	}
 
-	if (fpSub && errStruct.cnt_SectorTypeNonZeroInvalidSync) {
+	if (fpSub && errStruct.cnt_NonZeroInvalidSync) {
 		OutputLog(standardOut | file,
-			"[ERROR] Number of sector(s) where sync(0x00 - 0x0c) is invalid: %d\n", errStruct.cnt_SectorTypeNonZeroInvalidSync);
+			"[ERROR] Number of sector(s) where sync(0x00 - 0x0c) is invalid: %d\n", errStruct.cnt_NonZeroInvalidSync);
 		OutputFile("\tSector: ");
-		for (INT i = 0; i < errStruct.cnt_SectorTypeNonZeroInvalidSync; i++) {
-			OutputFile("%ld, ", errStruct.nonZeroInvalidSyncSectorNum[i]);
+		for (INT i = 0; i < errStruct.cnt_NonZeroInvalidSync; i++) {
+			OutputFile("%ld, ", errStruct.nonZeroInvalidSyncNum[i]);
 		}
 		OutputFile("\n");
 	}
 
-	if (fpSub && errStruct.cnt_SectorTypeZeroSync) {
+	if (fpSub && errStruct.cnt_ZeroSync) {
 		OutputLog(standardOut | file,
-			"[ERROR] Number of sector(s) where sync(0x00 - 0x0c) is zero: %d\n", errStruct.cnt_SectorTypeZeroSync);
+			"[ERROR] Number of sector(s) where sync(0x00 - 0x0c) is zero: %d\n", errStruct.cnt_ZeroSync);
 		OutputFile("\tSector: ");
 #ifdef _WIN32
 		if (execType == checkex) {
 			for (INT i = nonZeroSyncIndexStart; i <= nonZeroSyncIndexEnd; ++i) {
-				if (errStruct.zeroSyncSectorNum[i] != 0xFFFFFFFF) {
-					OutputFile("%ld, ", errStruct.zeroSyncSectorNum[i]);
+				if (errStruct.zeroSyncNum[i] != 0xFFFFFFFF) {
+					OutputFile("%ld, ", errStruct.zeroSyncNum[i]);
 				}
 			}
 		}
 		else {
 #endif
-			for (INT i = 0; i < errStruct.cnt_SectorTypeZeroSync; i++) {
-				OutputFile("%ld, ", errStruct.zeroSyncSectorNum[i]);
+			for (INT i = 0; i < errStruct.cnt_ZeroSync; i++) {
+				OutputFile("%ld, ", errStruct.zeroSyncNum[i]);
 			}
 #ifdef _WIN32
 		}
 #endif
 		OutputFile("\n");
 	}
-	if (fpSub && errStruct.cnt_SectorTypeZeroSyncPregap) {
+	if (fpSub && errStruct.cnt_ZeroSyncPregap) {
 		OutputLog(standardOut | file,
-			"[INFO] Number of pregap sector(s) where sync(0x00 - 0x0c) is zero: %d\n", errStruct.cnt_SectorTypeZeroSyncPregap);
+			"[INFO] Number of pregap sector(s) where sync(0x00 - 0x0c) is zero: %d\n", errStruct.cnt_ZeroSyncPregap);
 	}
 
-	if (fpSub && errStruct.cnt_SectorFilled55 == 0 && errStruct.cnt_SectorTypeMode0NotAllZero == 0 && errStruct.cnt_SectorTypeMode1BadEcc == 0
-		&& errStruct.cnt_SectorTypeMode1ReservedNotZero == 0 &&	errStruct.cnt_SectorTypeMode2 == 0 &&
-		errStruct.cnt_SectorTypeMode2SubheaderNotSame == 0 && errStruct.cnt_SectorTypeInvalidMode == 0 && errStruct.cnt_SectorTypeUnknownMode == 0 &&
-		errStruct.cnt_SectorTypeNonZeroInvalidSync == 0 && errStruct.cnt_SectorTypeZeroSync == 0) {
+	if (fpSub && errStruct.cnt_BadMsf == 0 && errStruct.cnt_SectorFilled55 == 0 &&
+		errStruct.cnt_Mode0NotAllZero == 0 &&
+		errStruct.cnt_Mode1BadEcc == 0 && errStruct.cnt_Mode1ReservedNotZero == 0 &&
+		errStruct.cnt_Mode2Form1SubheaderNotSame == 0 &&
+		errStruct.cnt_Mode2Form2SubheaderNotSame == 0 &&
+		errStruct.cnt_Mode2 == 0 && errStruct.cnt_Mode2SubheaderNotSame == 0 &&
+		errStruct.cnt_InvalidMode == 0 && errStruct.cnt_UnknownMode == 0 &&
+		errStruct.cnt_NonZeroInvalidSync == 0 && errStruct.cnt_ZeroSync == 0) {
 		OutputLog(standardOut | file, "[NO ERROR] User data vs. ecc/edc match all\n");
 	}
-	else if (!fpSub && errStruct.cnt_SectorFilled55 == 0 && errStruct.cnt_SectorTypeMode0NotAllZero == 0 && errStruct.cnt_SectorTypeMode1BadEcc == 0 &&
-		errStruct.cnt_SectorTypeMode1ReservedNotZero == 0 && errStruct.cnt_SectorTypeMode2 == 0 && errStruct.cnt_SectorTypeInvalidMode == 0 &&
-		errStruct.cnt_SectorTypeMode2SubheaderNotSame == 0 && errStruct.cnt_SectorTypeUnknownMode == 0) {
+	else if (!fpSub && errStruct.cnt_SectorFilled55 == 0 && errStruct.cnt_Mode0NotAllZero == 0 &&
+		errStruct.cnt_Mode1BadEcc == 0 &&	errStruct.cnt_Mode1ReservedNotZero == 0 &&
+		errStruct.cnt_Mode2 == 0 && errStruct.cnt_InvalidMode == 0 &&
+		errStruct.cnt_Mode2SubheaderNotSame == 0 && errStruct.cnt_UnknownMode == 0) {
 		OutputLog(standardOut | file, "User data vs. ecc/edc match");
 
-		if (errStruct.cnt_SectorTypeNonZeroInvalidSync == 0 && errStruct.cnt_SectorTypeZeroSync == 0) {
+		if (errStruct.cnt_NonZeroInvalidSync == 0 && errStruct.cnt_ZeroSync == 0) {
 			OutputLog(standardOut | file, " all\n");
 		}
-		if (errStruct.cnt_SectorTypeNonZeroInvalidSync) {
+		if (errStruct.cnt_NonZeroInvalidSync) {
 			OutputLog(standardOut | file
-				, "\nAudio or invalid sync sector num: %d", errStruct.cnt_SectorTypeNonZeroInvalidSync);
+				, "\nAudio or invalid sync sector num: %d", errStruct.cnt_NonZeroInvalidSync);
 		}
-		if (errStruct.cnt_SectorTypeZeroSync) {
+		if (errStruct.cnt_ZeroSync) {
 			OutputLog(standardOut | file
-				, "\nAudio or zero sync sector num: %d", errStruct.cnt_SectorTypeZeroSync);
+				, "\nAudio or zero sync sector num: %d", errStruct.cnt_ZeroSync);
 		}
 		OutputLog(standardOut | file, "\n");
 	}
 	else {
-		INT errors = errStruct.cnt_SectorFilled55 + errStruct.cnt_SectorTypeMode0NotAllZero + 
-			errStruct.cnt_SectorTypeMode1BadEcc + errStruct.cnt_SectorTypeMode2SubheaderNotSame + errStruct.cnt_SectorTypeZeroSync +
-			errStruct.cnt_SectorTypeInvalidMode + errStruct.cnt_SectorTypeUnknownMode + errStruct.cnt_SectorTypeNonZeroInvalidSync;
+		INT errors = errStruct.cnt_BadMsf + errStruct.cnt_SectorFilled55 + errStruct.cnt_Mode0NotAllZero +
+			errStruct.cnt_Mode1BadEcc + errStruct.cnt_Mode2SubheaderNotSame +
+			errStruct.cnt_ZeroSync + errStruct.cnt_InvalidMode +
+			errStruct.cnt_UnknownMode + errStruct.cnt_NonZeroInvalidSync;
 		OutputLog(standardOut | file, "Total errors: %d\n", errors);
 
-		INT warnings = errStruct.cnt_SectorTypeMode1ReservedNotZero + errStruct.cnt_SectorTypeMode2Form1SubheaderNotSame +
-			errStruct.cnt_SectorTypeMode2Form2SubheaderNotSame;
+		INT warnings = errStruct.cnt_Mode1ReservedNotZero + errStruct.cnt_Mode2Form1SubheaderNotSame +
+			errStruct.cnt_Mode2Form2SubheaderNotSame;
 		OutputLog(standardOut | file, "Total warnings: %d\n", warnings);
 	}
 
 	if (execType == fix) {
-		if (errStruct.cnt_SectorTypeMode1BadEcc ||
-			errStruct.cnt_SectorTypeMode2SubheaderNotSame ||
-			errStruct.cnt_SectorTypeNonZeroInvalidSync) {
+		if (errStruct.cnt_Mode1BadEcc ||
+			errStruct.cnt_Mode2SubheaderNotSame ||
+			errStruct.cnt_NonZeroInvalidSync) {
 			INT fixedCnt = 0;
 
-			if (errStruct.cnt_SectorTypeMode1BadEcc) {
+			if (errStruct.cnt_Mode1BadEcc) {
 				fixedCnt += fixSectorsFromArray(execType, fp
-					, errStruct.noMatchLBANum, errStruct.cnt_SectorTypeMode1BadEcc, startLBA, endLBA);
+					, errStruct.noMatchLBANum, errStruct.cnt_Mode1BadEcc, startLBA, endLBA);
 			}
-			if (errStruct.cnt_SectorTypeMode2SubheaderNotSame) {
+			if (errStruct.cnt_Mode2SubheaderNotSame) {
 				fixedCnt += fixSectorsFromArray(execType, fp
-					, errStruct.mode2SectorNum, errStruct.cnt_SectorTypeMode2SubheaderNotSame, startLBA, endLBA);
+					, errStruct.mode2Num, errStruct.cnt_Mode2SubheaderNotSame, startLBA, endLBA);
 			}
-			if (errStruct.cnt_SectorTypeNonZeroInvalidSync) {
+			if (errStruct.cnt_NonZeroInvalidSync) {
 				fixedCnt += fixSectorsFromArray(execType, fp
-					, errStruct.nonZeroInvalidSyncSectorNum, errStruct.cnt_SectorTypeNonZeroInvalidSync, startLBA, endLBA);
+					, errStruct.nonZeroInvalidSyncNum, errStruct.cnt_NonZeroInvalidSync, startLBA, endLBA);
 			}
 			OutputLog(standardOut | file, "%d unmatch sector is replaced at 0x55 except header\n", fixedCnt);
 		}
@@ -1195,7 +1239,7 @@ int main(int argc, char** argv)
 	OutputString("FILE: %s\n", argv[2]);
 
 	if (execType == check || execType == fix) {
-		std::string logFilePath = std::string(argv[2]) + "_EdcEcc.txt";
+		std::string logFilePath = std::string(argv[2]) + "_EccEdc.txt";
 
 		retVal = handleCheckOrFix(argv[2], execType
 			, check_fix_mode_s_startLBA, check_fix_mode_s_endLBA, TrackModeUnknown, logFilePath.c_str());
