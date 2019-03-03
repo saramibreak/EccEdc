@@ -670,6 +670,8 @@ INT handleCheckOrFix(
 	}
 
 	BYTE prevMode = 0;
+	BYTE prevCtl = 0;
+	BYTE byCtl = 0;
 	INT nFirstLBA = 0;
 	INT nLBA = 0;
 	INT nPrevLBA = 0;
@@ -686,7 +688,7 @@ INT handleCheckOrFix(
 		}
 		if (fpSub) {
 			fread(subbuf, sizeof(BYTE), sizeof(subbuf), fpSub);
-			BYTE byCtl = (BYTE)((subbuf[12] >> 4) & 0x0f);
+			byCtl = (BYTE)((subbuf[12] >> 4) & 0x0f);
 			if (byCtl & 0x04) {
 				if (nLBA > 0) {
 					nPrevLBA = nLBA;
@@ -698,7 +700,7 @@ INT handleCheckOrFix(
 					nLBA = MSFtoLBA(BcdToDec(buf[12]), BcdToDec(buf[13]), BcdToDec(buf[14])) - 150;
 				}
 
-				if (nLBA > 0 && nPrevLBA + 1 != nLBA) {
+				if (nLBA > 0 && (prevCtl & 0x04) && nPrevLBA + 1 != nLBA) {
 					errStruct.badMsfNum[errStruct.cnt_BadMsf++] = i;
 				}
 				else {
@@ -724,6 +726,7 @@ INT handleCheckOrFix(
 			errStruct.invalidModeNum[errStruct.cnt_InvalidMode++] = i;
 		}
 		prevMode = buf[15];
+		prevCtl = byCtl;
 
 #ifdef _WIN32
 		if (execType == checkex) {
