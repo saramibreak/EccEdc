@@ -80,7 +80,11 @@ changed: set to invalid mode except 0x00 or 0x01 or 0x02
 *2018-10-20
 fixed: count of LBA
 
-*2018-03-03
+*2019-03-03
 added: detecting ecc/edc is good but msf is bad sector
 added: detecting audio sector in data track
 fixed: looking on invalid mode as an error
+
+*2019-06-28
+fixed: bad msf
+deleted: some warning
