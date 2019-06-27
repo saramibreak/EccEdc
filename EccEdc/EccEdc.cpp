@@ -66,8 +66,8 @@ typedef struct _ERROR_STRUCT {
 #define OutputString(str, ...)		printf(str, ##__VA_ARGS__);
 #define OutputErrorString(str, ...)	fprintf(stderr, str, ##__VA_ARGS__);
 #define OutputFile(str, ...)		fprintf(fpLog, str, ##__VA_ARGS__);
-#define OutputFileWithLba(str, ...)	fprintf(fpLog, "LBA[%06ld, %#07lx], " str, ##__VA_ARGS__);
-#define OutputFileWithLbaMsf(str, ...)	fprintf(fpLog, "LBA[%06ld, %#07lx], MSF[%02x:%02x:%02x], " str, ##__VA_ARGS__);
+#define OutputFileWithLba(str, ...)	fprintf(fpLog, "LBA[%06d, %#07x], " str, ##__VA_ARGS__);
+#define OutputFileWithLbaMsf(str, ...)	fprintf(fpLog, "LBA[%06d, %#07x], MSF[%02x:%02x:%02x], " str, ##__VA_ARGS__);
 #define OutputLog(type, str, ...) \
 { \
 	INT t = type; \
@@ -339,8 +339,8 @@ INT handleCheckDetail(
 	LPBYTE buf,
 	BOOL skipTrackModeCheck,
 	TrackMode trackMode,
-	DWORD roopCnt,
-	DWORD roopCnt2,
+	UINT roopCnt,
+	UINT roopCnt2,
 	BOOL bSub,
 	LPBYTE subBuf
 ) {
@@ -605,8 +605,8 @@ INT handleCheckDetail(
 INT handleCheckOrFix(
 	LPCSTR filePath,
 	EXEC_TYPE execType,
-	DWORD startLBA,
-	DWORD endLBA,
+	UINT startLBA,
+	UINT endLBA,
 	TrackMode targetTrackMode,
 	LPCSTR logFilePath
 ) {
@@ -649,7 +649,7 @@ INT handleCheckOrFix(
 
 	BYTE buf[CD_RAW_SECTOR_SIZE] = { 0 };
 	BYTE subbuf[96] = { 0 };
-	DWORD roopSize = (DWORD)GetFileSize(0, fp) / CD_RAW_SECTOR_SIZE;
+	UINT roopSize = (UINT)GetFileSize(0, fp) / CD_RAW_SECTOR_SIZE;
 	ERROR_STRUCT errStruct;
 	if (!initCountNum(&errStruct, roopSize)) {
 		return EXIT_FAILURE;
@@ -675,8 +675,9 @@ INT handleCheckOrFix(
 	INT nFirstLBA = 0;
 	INT nLBA = 0;
 	INT nPrevLBA = 0;
+	BOOL bBadMsf = FALSE;
 
-	for (DWORD i = 0; i < roopSize; i++, j++) {
+	for (UINT i = 0; i < roopSize; i++, j++) {
 #ifdef _WIN32
 		if (execType == checkex) {
 			i = j + startLBA;
@@ -691,7 +692,13 @@ INT handleCheckOrFix(
 			byCtl = (BYTE)((subbuf[12] >> 4) & 0x0f);
 			if (byCtl & 0x04) {
 				if (nLBA > 0) {
-					nPrevLBA = nLBA;
+					if (bBadMsf) {
+						nPrevLBA++;
+						bBadMsf = FALSE;
+					}
+					else {
+						nPrevLBA = nLBA;
+					}
 				}
 				if ((buf[13] & 0x80) == 0x80) {
 					nLBA = MSFtoLBA(BcdToDec(BYTE(buf[12] ^ 0x01)), BcdToDec(BYTE(buf[13] ^ 0x80)), BcdToDec(buf[14])) - 150;
@@ -700,8 +707,15 @@ INT handleCheckOrFix(
 					nLBA = MSFtoLBA(BcdToDec(buf[12]), BcdToDec(buf[13]), BcdToDec(buf[14])) - 150;
 				}
 
+				if (nLBA == -150 && (prevCtl & 0x04) == 0) {
+					nLBA = (INT)i;
+					nPrevLBA = (INT)i - 1;
+				}
+
 				if (nLBA > 0 && (prevCtl & 0x04) && nPrevLBA + 1 != nLBA) {
 					errStruct.badMsfNum[errStruct.cnt_BadMsf++] = i;
+					bBadMsf = TRUE;
+					OutputFileWithLbaMsf("bad msf\n", nPrevLBA + 1, nPrevLBA + 1, buf[12], buf[13], buf[14]);
 				}
 				else {
 					if (nLBA == -150 && nPrevLBA != 0) {
@@ -730,11 +744,11 @@ INT handleCheckOrFix(
 
 #ifdef _WIN32
 		if (execType == checkex) {
-			OutputString("\rChecking sectors (LBA) %6lu/%6lu", i, startLBA + roopSize - 1);
+			OutputString("\rChecking sectors (LBA) %6u/%6u", i, startLBA + roopSize - 1);
 		}
 		else {
 #endif
-			OutputString("\rChecking sectors (LBA) %6lu/%6lu", i, roopSize - 1);
+			OutputString("\rChecking sectors (LBA) %6u/%6u", i, roopSize - 1);
 #ifdef _WIN32
 		}
 #endif
