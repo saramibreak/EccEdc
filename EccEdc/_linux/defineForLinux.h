@@ -121,7 +121,7 @@ typedef void *HANDLE;
 typedef BYTE  BOOLEAN;
 typedef BOOLEAN *PBOOLEAN;
 
-#define UNREFERENCED_PARAMETER(P)          (P)
+#define UNREFERENCED_PARAMETER(P)          (VOID)(P)
 
 #define RtlFillMemory(Destination,Length,Fill) memset((Destination),(Fill),(Length))
 #define RtlZeroMemory(Destination,Length) memset((Destination),0,(Length))

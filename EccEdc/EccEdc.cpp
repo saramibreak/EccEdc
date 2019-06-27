@@ -21,8 +21,8 @@
 #include "Enum.h"
 #include "_external/ecm.h"
 
-static DWORD check_fix_mode_s_startLBA = 0;
-static DWORD check_fix_mode_s_endLBA = 0;
+static UINT check_fix_mode_s_startLBA = 0;
+static UINT check_fix_mode_s_endLBA = 0;
 static BYTE write_mode_s_Minute = 0;
 static BYTE write_mode_s_Second = 0;
 static BYTE write_mode_s_Frame = 0;
@@ -215,6 +215,9 @@ INT fixSectorsFromArray(
 	DWORD startLBA,
 	DWORD endLBA
 ) {
+#ifndef _WIN32
+	UNREFERENCED_PARAMETER(execType);
+#endif
 	INT fixedCount = 0;
 
 	for (INT i = 0; i < sectorCount; i++) {
@@ -344,6 +347,10 @@ INT handleCheckDetail(
 	BOOL bSub,
 	LPBYTE subBuf
 ) {
+#ifndef _WIN32
+	UNREFERENCED_PARAMETER(execType);
+	UNREFERENCED_PARAMETER(roopCnt2);
+#endif
 	if (IsErrorSector(buf)) {
 		OutputFileWithLbaMsf("2336 bytes have been already replaced at 0x55\n", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 		pErrStruct->errorNum[pErrStruct->cnt_SectorFilled55++] = roopCnt;
@@ -661,7 +668,7 @@ INT handleCheckOrFix(
 
 	BOOL skipTrackModeCheck = targetTrackMode == TrackModeUnknown;
 	TrackMode trackMode = targetTrackMode;
-	DWORD j = 0;
+	UINT j = 0;
 	if (fpSub) {
 		OutputFile("Sub file exists\n");
 	}
@@ -683,12 +690,16 @@ INT handleCheckOrFix(
 			i = j + startLBA;
 		}
 #endif
-		fread(buf, sizeof(BYTE), sizeof(buf), fp);
+		if (fread(buf, sizeof(BYTE), sizeof(buf), fp) < sizeof(buf)) {
+			OutputErrorString("Failed to read [F:%s][L:%d]\n", __FUNCTION__, __LINE__);
+		}
 		if (i == 0) {
 			nFirstLBA = MSFtoLBA(BcdToDec(buf[12]), BcdToDec(buf[13]), BcdToDec(buf[14]));
 		}
 		if (fpSub) {
-			fread(subbuf, sizeof(BYTE), sizeof(subbuf), fpSub);
+			if (fread(subbuf, sizeof(BYTE), sizeof(subbuf), fpSub) < sizeof(subbuf)) {
+				OutputErrorString("Failed to read [F:%s][L:%d]\n", __FUNCTION__, __LINE__);
+			}
 			byCtl = (BYTE)((subbuf[12] >> 4) & 0x0f);
 			if (byCtl & 0x04) {
 				if (nLBA > 0) {
@@ -722,7 +733,7 @@ INT handleCheckOrFix(
 						// for audio sector of data track
 						nLBA = nPrevLBA + 1;
 					}
-					handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, (DWORD)nLBA, j, TRUE, subbuf);
+					handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, (UINT)nLBA, j, TRUE, subbuf);
 				}
 			}
 			else {
@@ -1188,13 +1199,13 @@ INT checkArg(
 		*pExecType = fix;
 	}
 	else if (argc == 5 && (!strcmp(argv[1], "fix"))) {
-		check_fix_mode_s_startLBA = strtoul(argv[3], &endptr, 10);
+		check_fix_mode_s_startLBA = (UINT)strtoul(argv[3], &endptr, 10);
 		if (*endptr) {
 			OutputErrorString("[%s] is invalid argument. Please input integer.\n", endptr);
 			return FALSE;
 		}
 
-		check_fix_mode_s_endLBA = strtoul(argv[4], &endptr, 10);
+		check_fix_mode_s_endLBA = (UINT)strtoul(argv[4], &endptr, 10);
 		if (*endptr) {
 			OutputErrorString("[%s] is invalid argument. Please input integer.\n", endptr);
 			return FALSE;
