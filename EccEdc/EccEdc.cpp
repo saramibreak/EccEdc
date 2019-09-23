@@ -755,11 +755,11 @@ INT handleCheckOrFix(
 
 #ifdef _WIN32
 		if (execType == checkex) {
-			OutputString("\rChecking sectors (LBA) %6u/%6u", i, startLBA + roopSize - 1);
+			OutputString("\rChecking sectors: %6u/%6u", i, startLBA + roopSize - 1);
 		}
 		else {
 #endif
-			OutputString("\rChecking sectors (LBA) %6u/%6u", i, roopSize - 1);
+			OutputString("\rChecking sectors: %6u/%6u", i, roopSize - 1);
 #ifdef _WIN32
 		}
 #endif
