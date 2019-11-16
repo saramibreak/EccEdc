@@ -88,3 +88,8 @@ fixed: looking on invalid mode as an error
 *2019-06-28
 fixed: bad msf
 deleted: some warning
+
+*2019-11-16
+added: support SecuROM mode 2 disc
+fixed: counter string of LBA
+fixed: bad msf handling
