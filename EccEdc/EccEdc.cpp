@@ -711,11 +711,13 @@ INT handleCheckOrFix(
 						nPrevLBA = nLBA;
 					}
 				}
+				BYTE m = 0, s = 0, f = 0;
 				if ((buf[13] & 0x80) == 0x80) {
 					nLBA = MSFtoLBA(BcdToDec(BYTE(buf[12] ^ 0x01)), BcdToDec(BYTE(buf[13] ^ 0x80)), BcdToDec(buf[14])) - 150;
 				}
 				else {
 					nLBA = MSFtoLBA(BcdToDec(buf[12]), BcdToDec(buf[13]), BcdToDec(buf[14])) - 150;
+					LBAtoMSF(nLBA + 150, &m, &s, &f);
 				}
 
 				if (nLBA == -150 && (prevCtl & 0x04) == 0) {
@@ -723,7 +725,10 @@ INT handleCheckOrFix(
 					nPrevLBA = (INT)i - 1;
 				}
 
-				if (nLBA > 0 && (prevCtl & 0x04) && nPrevLBA + 1 != nLBA) {
+				if (m == BcdToDec(buf[12]) && s == BcdToDec(buf[13]) && f == BcdToDec(buf[14])) {
+					handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, (UINT)nLBA, j, TRUE, subbuf);
+				}
+				else if (nLBA > 0 && (prevCtl & 0x04) && nPrevLBA + 1 != nLBA) {
 					errStruct.badMsfNum[errStruct.cnt_BadMsf++] = i;
 					bBadMsf = TRUE;
 					OutputFileWithLbaMsf("bad msf\n", nPrevLBA + 1, nPrevLBA + 1, buf[12], buf[13], buf[14]);
@@ -747,7 +752,7 @@ INT handleCheckOrFix(
 			handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, i, j, FALSE, subbuf);
 		}
 
-		if (i == roopSize - 4 && buf[15] == 0x02 && prevMode == 0x01) {
+		if (i == roopSize - 4 && ((buf[15] == 0x02 && prevMode == 0x01) || (buf[15] == 0x01 && prevMode == 0x02))) {
 			errStruct.invalidModeNum[errStruct.cnt_InvalidMode++] = i;
 		}
 		prevMode = buf[15];
