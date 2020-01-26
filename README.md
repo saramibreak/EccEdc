@@ -1,14 +1,20 @@
 # EccEdc
-## Summary
- This program checks or fix user data of the 2048 byte per sector by using ecc/edc.
+## Overview
+ This command-line program checks or fixes the user data of the 2048 byte per sector by using ecc/edc.
  This also creates 2352 sector with sync, addr, ecc, edc (user data is all zero).
- It works on Windows PC (WinXP or higher).
+
+ This program works on Windows PC (WinXP or higher) and Linux.
+
+## Bug report
+ To: http://forum.redump.org/topic/10483/discimagecreator/
+  or  
+ To: https://github.com/saramibreak/EccEdc/issues
 
 ## Usage
  Start cmd.exe & run exe. for more information, run in no arg.
 
 ## Development Tool
- Visual Studio 2017 (Visual C++ 2017)
+ Visual Studio 2019 (Visual C++ 2019)
 
 ## License
  See LICENSE  
@@ -20,9 +26,5 @@
  Use this tool at own your risk.
  Trouble in regard to the use of this tool, I can not guarantee any.
 
-## Bug report
- To: http://forum.redump.org/topic/10483/discimagecreator/
-
 ## Gratitude
  Thank's redump.org users.
-

@@ -93,3 +93,6 @@ deleted: some warning
 added: support SecuROM mode 2 disc
 fixed: counter string of LBA
 fixed: bad msf handling
+
+*2020-01-26
+changed: mode 2 logs

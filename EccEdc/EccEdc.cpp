@@ -467,99 +467,136 @@ INT handleCheckDetail(
 				, buf[0x10], buf[0x11], buf[0x12], buf[0x13], buf[0x14], buf[0x15], buf[0x16], buf[0x17]);
 		}
 
-		OutputFile("SubHeader[1](IsInterleaved[%02x]), [2](ChannelNum[%02x]), [3](SubMode[%02x]), ", buf[16], buf[17], buf[18]);
+		OutputFile("SubHeader[1](FileNum[%02x]), [2](ChannelNum[%02x]), [3](Submode[%02x])[", buf[16], buf[17], buf[18]);
 		if (buf[18] & 0x80) {
-			OutputFile("IsEof, ");
+			OutputFile("EOF");
+		}
+		else {
+			OutputFile("NoEOF");
 		}
 
 		if (buf[18] & 0x40) {
-			OutputFile("Real-time, ");
+			OutputFile(", Real-time");
 		}
 
 		if (buf[18] & 0x20) {
-			OutputFile("Form 2, ");
+			OutputFile(", Form 2");
 			if (bNoEdc) {
 				pErrStruct->noEDCNum[pErrStruct->cnt_Mode2++] = roopCnt;
 			}
 		}
 		else {
-			OutputFile("Form 1, ");
+			OutputFile(", Form 1");
 			if (bNoEdc) {
 				pErrStruct->noMatchLBANum[pErrStruct->cnt_Mode1BadEcc++] = roopCnt;
 			}
 		}
 
 		if (buf[18] & 0x10) {
-			OutputFile("Trigger, ");
+			OutputFile(", Trigger");
 		}
 
 		BOOL bAudio = FALSE;
+		BOOL bVideo = FALSE;
 
 		if (buf[18] & 0x08) {
-			OutputFile("Data, ");
+			OutputFile(", Data");
 		}
 		else if (buf[18] & 0x04) {
-			OutputFile("Audio, ");
+			OutputFile(", Audio");
 			bAudio = TRUE;
 		}
 		else if (buf[18] & 0x02) {
-			OutputFile("Video, ");
+			OutputFile(", Video");
+			bVideo = TRUE;
 		}
 
 		if (buf[18] & 0x01) {
-			OutputFile("End audio, ");
+			OutputFile(", EndOfRecord");
 		}
 
-		OutputFile("[4](CodingInfo[%02x])", buf[19]);
+		OutputFile("], [4](CodingInfo[%02x])[", buf[19]);
 
 		if (bAudio) {
-			if (buf[19] & 0x80) {
-				OutputFile("Reserved, ");
-			}
-
 			if (buf[19] & 0x40) {
-				OutputFile("Emphasis, ");
+				OutputFile("Emphasis On");
 			}
-
-			if (buf[19] & 0x20) {
-				OutputFile("bits/sample, ");
+			else {
+				OutputFile("Emphasis Off");
 			}
 
 			if (buf[19] & 0x10) {
-				OutputFile("8 bits/sample, 4 sound sectors, ");
+				OutputFile(", 8 bits/sample");
 			}
 			else {
-				OutputFile("4 bits/sample, 8 sound sectors, ");
-			}
-
-			if (buf[19] & 0x08) {
-				OutputFile("sample rate, ");
+				OutputFile(", 4 bits/sample");
 			}
 
 			if (buf[19] & 0x04) {
-				OutputFile("18.9kHz playback, ");
+				OutputFile(", 18.9kHz");
 			}
 			else {
-				OutputFile("37.8kHz playback, ");
-			}
-
-			if (buf[19] & 0x02) {
-				OutputFile("Stereo, ");
+				OutputFile(", 37.8kHz");
 			}
 
 			if (buf[19] & 0x01) {
-				OutputFile("Stereo, ");
+				OutputFile(", Stereo");
 			}
 			else {
-				OutputFile("Mono, ");
+				OutputFile(", Mono");
 			}
 		}
-		else {
-			if (buf[19]) {
-				OutputFile("Reserved, ");
+		else if (bVideo) {
+			if (buf[19] & 0x80) {
+				OutputFile("Application-specific coding");
+			}
+			else {
+				OutputFile("chapter V coding");
+			}
+			
+			if (buf[19] & 0x40) {
+				OutputFile(", Even lines");
+			}
+			else {
+				OutputFile(", Odd lines");
+			}
+
+			if (buf[19] & 0x30) {
+				OutputFile(", High Resolution");
+			}
+			else if (buf[19] & 0x10) {
+				OutputFile(", Double Resolution");
+			}
+			else {
+				OutputFile(", Normal Resolution");
+			}
+
+			if (buf[19] & 0x07) {
+				OutputFile(", RGB555 (upper)");
+			}
+			else if (buf[19] & 0x06) {
+				OutputFile(", RGB555 (lower)");
+			}
+			else if (buf[19] & 0x05) {
+				OutputFile(", DYUV");
+			}
+			else if (buf[19] & 0x04) {
+				OutputFile(", RL7");
+			}
+			else if (buf[19] & 0x03) {
+				OutputFile(", RL3");
+			}
+			else if (buf[19] & 0x02) {
+				OutputFile(", CLUT8");
+			}
+			else if (buf[19] & 0x01) {
+				OutputFile(", CLUT7");
+			}
+			else if ((buf[19] & 0x0f) == 0) {
+				OutputFile(", CLUT4");
 			}
 		}
-		OutputFile("\n");
+		OutputFile("]\n");
 	}
 	else if (sectorType == UnknownMode) {
 		OutputFileWithLbaMsf("unknown mode: %02x\n", roopCnt, roopCnt, buf[12], buf[13], buf[14], buf[15]);
