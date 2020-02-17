@@ -757,7 +757,7 @@ INT handleCheckOrFix(
 					LBAtoMSF(nLBA + 150, &m, &s, &f);
 				}
 
-				if (nLBA == -150 && (prevCtl & 0x04) == 0) {
+				if (nLBA == -150) {
 					nLBA = (INT)i;
 					nPrevLBA = (INT)i - 1;
 				}
