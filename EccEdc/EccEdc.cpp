@@ -713,8 +713,8 @@ INT handleCheckOrFix(
 		OutputFile("Sub file doesn't exist\n");
 	}
 
-	BYTE prevMode = 0;
 	BYTE prevCtl = 0;
+	BYTE prevMode[5] = { 0 };
 	BYTE byCtl = 0;
 	INT nFirstLBA = 0;
 	INT nLBA = 0;
@@ -789,10 +789,31 @@ INT handleCheckOrFix(
 			handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, i, j, FALSE, subbuf);
 		}
 
-		if (i == roopSize - 4 && ((buf[15] == 0x02 && prevMode == 0x01) || (buf[15] == 0x01 && prevMode == 0x02))) {
-			errStruct.invalidModeNum[errStruct.cnt_InvalidMode++] = i;
+		prevMode[4] = prevMode[3];
+		prevMode[3] = prevMode[2];
+		prevMode[2] = prevMode[1];
+		prevMode[1] = prevMode[0];
+		prevMode[0] = buf[15];
+		BOOL bSecuROM = FALSE;
+		UINT tmplba = 0;
+		if (i == roopSize - 1) {
+			// lase sector
+			if (((byCtl & 0x04) == 0x04) && prevMode[0] == prevMode[1] &&
+				prevMode[0] == prevMode[2] && prevMode[0] != prevMode[3]) {
+				bSecuROM = TRUE;
+				tmplba = roopSize - 4;
+			}
 		}
-		prevMode = buf[15];
+		else {
+			if (((prevCtl & 0x04) == 0x04) && prevMode[0] == 0 &&
+				prevMode[1] == prevMode[2] && prevMode[1] == prevMode[3] && prevMode[1] != prevMode[4]) {
+				bSecuROM = TRUE;
+				tmplba = i - 4;
+			}
+		}
+		if (bSecuROM) {
+			errStruct.invalidModeNum[errStruct.cnt_InvalidMode++] = tmplba;
+		}
 		prevCtl = byCtl;
 
 #ifdef _WIN32
