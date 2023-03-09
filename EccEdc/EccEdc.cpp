@@ -649,6 +649,7 @@ INT handleCheckDetail(
 INT handleCheckOrFix(
 	LPCSTR filePath,
 	EXEC_TYPE execType,
+	LPCSTR pszType,
 	UINT startLBA,
 	UINT endLBA,
 	TrackMode targetTrackMode,
@@ -677,22 +678,32 @@ INT handleCheckOrFix(
 		fclose(fp);
 		return EXIT_FAILURE;
 	}
-	CHAR path[_MAX_PATH] = { 0 };
-	CHAR drive[_MAX_DRIVE] = { 0 };
-	CHAR dir[_MAX_DIR] = { 0 };
-	CHAR fname[_MAX_FNAME] = { 0 };
+	CHAR path[_MAX_PATH] = {};
+	CHAR drive[_MAX_DRIVE] = {};
+	CHAR dir[_MAX_DIR] = {};
+	CHAR fname[_MAX_FNAME] = {};
 	_splitpath(filePath, drive, dir, fname, NULL);
-	_makepath(path, drive, dir, fname, ".sub");
-
-	FILE* fpSub = NULL;
-	if (NULL == (fpSub = fopen(path, "rb"))) {
+	if (!strncmp(pszType, "TOC", 3)) {
+		_makepath(path, drive, dir, fname, ".toc");
+		OutputFile("Toc file exists\n");
+	}
+	else if (!strncmp(pszType, "Sub", 3)) {
+		CHAR tmpFname[_MAX_FNAME] = {};
+		strncpy(tmpFname, fname, _MAX_FNAME);
+		PCHAR addr = strstr(tmpFname, " (Subs control)");
+		if (addr) {
+			tmpFname[addr - tmpFname] = 0;
+		}
+		_makepath(path, drive, dir, tmpFname, ".sub");
+		OutputFile("Sub file exists\n");
+	}
+	FILE* fpCheckFile = NULL;
+	if (NULL == (fpCheckFile = fopen(path, "rb"))) {
 		OutputLastErrorNumAndString(__FUNCTION__, __LINE__);
 		OutputErrorString("%s\n", path);
-		OutputErrorString("If sub file exists, this app can check the data sector precisely\n");
+		OutputErrorString("If toc or sub file exists, this app can check the data sector precisely\n");
 	}
 
-	BYTE buf[CD_RAW_SECTOR_SIZE] = { 0 };
-	BYTE subbuf[96] = { 0 };
 	UINT roopSize = (UINT)GetFileSize(0, fp) / CD_RAW_SECTOR_SIZE;
 	ERROR_STRUCT errStruct;
 	if (!initCountNum(&errStruct, roopSize)) {
@@ -706,21 +717,48 @@ INT handleCheckOrFix(
 	BOOL skipTrackModeCheck = targetTrackMode == TrackModeUnknown;
 	TrackMode trackMode = targetTrackMode;
 	UINT j = 0;
-	if (fpSub) {
-		OutputFile("Sub file exists\n");
-	}
-	else {
-		OutputFile("Sub file doesn't exist\n");
-	}
-
 	BYTE prevCtl = 0;
-	BYTE prevMode[5] = { 0 };
+	BYTE prevMode[6] = {};
 	BYTE byCtl = 0;
 	INT nFirstLBA = 0;
 	INT nLBA = 0;
 	INT nPrevLBA = 0;
 	BOOL bBadMsf = FALSE;
 
+	BYTE buf[CD_RAW_SECTOR_SIZE] = {};
+	typedef struct _TRACK_DATA {
+		UCHAR Reserved;
+		UCHAR Control : 4;
+		UCHAR Adr : 4;
+		UCHAR TrackNumber;
+		UCHAR Reserved1;
+		UCHAR Address[4];
+	} TRACK_DATA;
+	typedef struct _CDROM_TOC {
+		UCHAR Length[2];
+		UCHAR FirstTrack;
+		UCHAR LastTrack;
+		TRACK_DATA TrackData[100];
+	} CDROM_TOC;
+	CDROM_TOC tocbuf = {};
+	BYTE subbuf[96] = {};
+	INT nTrkIdx = 0;
+	UINT n1stLBAinToc[100] = {};
+	UCHAR nCtlinToc[100] = {};
+
+	if (!strncmp(pszType, "TOC", 3)) {
+		if (fread(&tocbuf, sizeof(BYTE), sizeof(tocbuf), fpCheckFile) < sizeof(tocbuf)) {
+			OutputErrorString("Failed to read [F:%s][L:%d]\n", __FUNCTION__, __LINE__);
+			return EXIT_FAILURE;
+		}
+		for (INT i = tocbuf.FirstTrack - 1; i < tocbuf.LastTrack; i++) {
+			for (INT d = 0, k = 24; d < 4; d++, k -= 8) {
+				n1stLBAinToc[i] |= tocbuf.TrackData[i].Address[d] << k;
+			}
+			nCtlinToc[i] = tocbuf.TrackData[i].Control;
+//			OutputString("Trk %d, ctl %d lba %d\n", i + 1, nCtlinToc[i], n1stLBAinToc[i]);
+		}
+	}
 	for (UINT i = 0; i < roopSize; i++, j++) {
 #ifdef _WIN32
 		if (execType == checkex) {
@@ -733,11 +771,20 @@ INT handleCheckOrFix(
 		if (i == 0) {
 			nFirstLBA = MSFtoLBA(BcdToDec(buf[12]), BcdToDec(buf[13]), BcdToDec(buf[14]));
 		}
-		if (fpSub) {
-			if (fread(subbuf, sizeof(BYTE), sizeof(subbuf), fpSub) < sizeof(subbuf)) {
-				OutputErrorString("Failed to read [F:%s][L:%d]\n", __FUNCTION__, __LINE__);
+		if (fpCheckFile) {
+			if (!strncmp(pszType, "TOC", 3)) {
+				if (n1stLBAinToc[nTrkIdx] == i) {
+//					OutputString("ctl %d lba %d\n", nCtlinToc[nTrkIdx], n1stLBAinToc[nTrkIdx]);
+					byCtl = nCtlinToc[nTrkIdx++];
+				}
 			}
-			byCtl = (BYTE)((subbuf[12] >> 4) & 0x0f);
+			else if (!strncmp(pszType, "Sub", 3)) {
+				if (fread(subbuf, sizeof(BYTE), sizeof(subbuf), fpCheckFile) < sizeof(subbuf)) {
+					OutputErrorString("Failed to read [F:%s][L:%d]\n", __FUNCTION__, __LINE__);
+					return EXIT_FAILURE;
+				}
+				byCtl = (BYTE)((subbuf[12] >> 4) & 0x0f);
+			}
 			if (byCtl & 0x04) {
 				if (nLBA > 0) {
 					if (bBadMsf) {
@@ -789,6 +836,7 @@ INT handleCheckOrFix(
 			handleCheckDetail(&errStruct, execType, buf, skipTrackModeCheck, trackMode, i, j, FALSE, subbuf);
 		}
 
+		prevMode[5] = prevMode[4];
 		prevMode[4] = prevMode[3];
 		prevMode[3] = prevMode[2];
 		prevMode[2] = prevMode[1];
@@ -797,7 +845,7 @@ INT handleCheckOrFix(
 		BOOL bSecuROM = FALSE;
 		UINT tmplba = 0;
 		if (i == roopSize - 1) {
-			// lase sector
+			// last sector
 			if (((byCtl & 0x04) == 0x04) && prevMode[0] == prevMode[1] &&
 				prevMode[0] == prevMode[2] && prevMode[0] != prevMode[3]) {
 				bSecuROM = TRUE;
@@ -805,8 +853,8 @@ INT handleCheckOrFix(
 			}
 		}
 		else {
-			if (((prevCtl & 0x04) == 0x04) && prevMode[0] == 0 &&
-				prevMode[1] == prevMode[2] && prevMode[1] == prevMode[3] && prevMode[1] != prevMode[4]) {
+			if (((prevCtl & 0x04) == 0x04) && prevMode[0] == 0 && prevMode[1] == prevMode[2] &&
+				prevMode[1] == prevMode[3] && prevMode[1] != prevMode[4] && prevMode[1] == prevMode[5]) {
 				bSecuROM = TRUE;
 				tmplba = i - 4;
 			}
@@ -967,7 +1015,7 @@ INT handleCheckOrFix(
 		OutputFile("\n");
 	}
 
-	if (fpSub && errStruct.cnt_NonZeroInvalidSync) {
+	if (fpCheckFile && errStruct.cnt_NonZeroInvalidSync) {
 		OutputLog(standardOut | file,
 			"[ERROR] Number of sector(s) where sync(0x00 - 0x0c) is invalid: %d\n", errStruct.cnt_NonZeroInvalidSync);
 		OutputFile("\tSector: ");
@@ -977,7 +1025,7 @@ INT handleCheckOrFix(
 		OutputFile("\n");
 	}
 
-	if (fpSub && errStruct.cnt_ZeroSync) {
+	if (fpCheckFile && errStruct.cnt_ZeroSync) {
 		OutputLog(standardOut | file,
 			"[ERROR] Number of sector(s) where sync(0x00 - 0x0c) is zero: %d\n", errStruct.cnt_ZeroSync);
 		OutputFile("\tSector: ");
@@ -999,12 +1047,12 @@ INT handleCheckOrFix(
 #endif
 		OutputFile("\n");
 	}
-	if (fpSub && errStruct.cnt_ZeroSyncPregap) {
+	if (fpCheckFile && errStruct.cnt_ZeroSyncPregap) {
 		OutputLog(standardOut | file,
 			"[INFO] Number of pregap sector(s) where sync(0x00 - 0x0c) is zero: %d\n", errStruct.cnt_ZeroSyncPregap);
 	}
 
-	if (fpSub && errStruct.cnt_BadMsf == 0 && errStruct.cnt_SectorFilled55 == 0 &&
+	if (fpCheckFile && errStruct.cnt_BadMsf == 0 && errStruct.cnt_SectorFilled55 == 0 &&
 		errStruct.cnt_Mode0NotAllZero == 0 &&
 		errStruct.cnt_Mode1BadEcc == 0 && errStruct.cnt_Mode1ReservedNotZero == 0 &&
 		errStruct.cnt_Mode2Form1SubheaderNotSame == 0 &&
@@ -1014,7 +1062,7 @@ INT handleCheckOrFix(
 		errStruct.cnt_NonZeroInvalidSync == 0 && errStruct.cnt_ZeroSync == 0) {
 		OutputLog(standardOut | file, "[NO ERROR] User data vs. ecc/edc match all\n");
 	}
-	else if (!fpSub && errStruct.cnt_SectorFilled55 == 0 && errStruct.cnt_Mode0NotAllZero == 0 &&
+	else if (!fpCheckFile && errStruct.cnt_SectorFilled55 == 0 && errStruct.cnt_Mode0NotAllZero == 0 &&
 		errStruct.cnt_Mode1BadEcc == 0 &&	errStruct.cnt_Mode1ReservedNotZero == 0 &&
 		errStruct.cnt_Mode2 == 0 && errStruct.cnt_InvalidMode == 0 &&
 		errStruct.cnt_Mode2SubheaderNotSame == 0 && errStruct.cnt_UnknownMode == 0) {
@@ -1068,15 +1116,16 @@ INT handleCheckOrFix(
 	}
 	terminateCountNum(&errStruct);
 	fclose(fp);
-	if (fpSub) {
-		fclose(fpSub);
+	if (fpCheckFile) {
+		fclose(fpCheckFile);
 	}
 	fclose(fpLog);
 	return EXIT_SUCCESS;
 }
 #ifdef _WIN32
 INT handleCheckEx(
-	LPCSTR filePath
+	LPCSTR filePath,
+	LPCSTR pszType
 ) {
 	std::vector<std::string> cueLines;
 
@@ -1159,7 +1208,7 @@ INT handleCheckEx(
 
 			std::string logFilePath = std::string(filePath) + "_EdcEcc_" + suffixBuffer;
 
-			if ((retVal = handleCheckOrFix(track.trackPath.c_str(), check, track.lsnStart, track.lsnEnd, track.trackMode, logFilePath.c_str())) != EXIT_SUCCESS) {
+			if ((retVal = handleCheckOrFix(track.trackPath.c_str(), check, pszType, track.lsnStart, track.lsnEnd, track.trackMode, logFilePath.c_str())) != EXIT_SUCCESS) {
 				OutputString("Cannot check track: %s\n", track.trackPath.c_str());
 
 				break;
@@ -1213,31 +1262,37 @@ VOID printUsage(
 #ifdef _WIN32
 	OutputString(
 		"Usage\n"
-		"\tcheck <InFileName>\n"
+		"\tcheck <Type> <InFileName>\n"
 		"\t\tValidate user data of 2048 byte per sector\n"
-		"\tcheckex <CueFile>\n"
+		"\tcheckex <Type> <CueFile>\n"
 		"\t\tValidate user data of 2048 byte per sector (alternate)\n"
-		"\tfix <InOutFileName>\n"
+		"\tfix <Type> <InOutFileName>\n"
 		"\t\tReplace data of 2336 byte to '0x55' except header\n"
-		"\tfix <InOutFileName> <startLBA> <endLBA>\n"
+		"\tfix <Type> <InOutFileName> <startLBA> <endLBA>\n"
 		"\t\tReplace data of 2336 byte to '0x55' except header from <startLBA> to <endLBA>\n"
 		"\twrite <OutFileName> <Minute> <Second> <Frame> <Mode> <CreateSectorNum>\n"
 		"\t\tCreate a 2352 byte per sector with sync, addr, mode, ecc, edc. (User data is all zero)\n"
 		"\t\tMode\t1: mode 1, 2: mode 2 form 1, 3: mode 2 form 2\n"
+		"Argument\n"
+		"\tType\tTOC: Sector is checked using .toc\n"
+		"\t    \tSub: Sector is checked using .sub\n"
 	);
 	system("pause");
 #else
 	OutputString(
 		"Usage\n"
-		"\tcheck <InFileName>\n"
+		"\tcheck <Type> <InFileName>\n"
 		"\t\tValidate user data of 2048 byte per sector\n"
-		"\tfix <InOutFileName>\n"
+		"\tfix <Type> <InOutFileName>\n"
 		"\t\tReplace data of 2336 byte to '0x55' except header\n"
-		"\tfix <InOutFileName> <startLBA> <endLBA>\n"
+		"\tfix <Type> <InOutFileName> <startLBA> <endLBA>\n"
 		"\t\tReplace data of 2336 byte to '0x55' except header from <startLBA> to <endLBA>\n"
 		"\twrite <OutFileName> <Minute> <Second> <Frame> <Mode> <CreateSectorNum>\n"
 		"\t\tCreate a 2352 byte per sector with sync, addr, mode, ecc, edc. (User data is all zero)\n"
 		"\t\tMode\t1: mode 1, 2: mode 2 form 1, 3: mode 2 form 2\n"
+		"Argument\n"
+		"\tType\tTOC: Sector is checked using .toc\n"
+		"\t    \tSub: Sector is checked using .sub\n"
 	);
 #endif
 }
@@ -1250,25 +1305,25 @@ INT checkArg(
 	PCHAR endptr = NULL;
 	INT ret = TRUE;
 
-	if (argc == 3 && (!strcmp(argv[1], "check"))) {
+	if (argc == 4 && (!strcmp(argv[1], "check"))) {
 		*pExecType = check;
 	}
 #ifdef _WIN32
-	else if (argc == 3 && (!strcmp(argv[1], "checkex"))) {
+	else if (argc == 4 && (!strcmp(argv[1], "checkex"))) {
 		*pExecType = checkex;
 	}
 #endif
-	else if (argc == 3 && (!strcmp(argv[1], "fix"))) {
+	else if (argc == 4 && (!strcmp(argv[1], "fix"))) {
 		*pExecType = fix;
 	}
-	else if (argc == 5 && (!strcmp(argv[1], "fix"))) {
-		check_fix_mode_s_startLBA = (UINT)strtoul(argv[3], &endptr, 10);
+	else if (argc == 6 && (!strcmp(argv[1], "fix"))) {
+		check_fix_mode_s_startLBA = (UINT)strtoul(argv[4], &endptr, 10);
 		if (*endptr) {
 			OutputErrorString("[%s] is invalid argument. Please input integer.\n", endptr);
 			return FALSE;
 		}
 
-		check_fix_mode_s_endLBA = (UINT)strtoul(argv[4], &endptr, 10);
+		check_fix_mode_s_endLBA = (UINT)strtoul(argv[5], &endptr, 10);
 		if (*endptr) {
 			OutputErrorString("[%s] is invalid argument. Please input integer.\n", endptr);
 			return FALSE;
@@ -1327,17 +1382,15 @@ int main(int argc, char** argv)
 
 	INT retVal = EXIT_FAILURE;
 
-	OutputString("FILE: %s\n", argv[2]);
-
 	if (execType == check || execType == fix) {
-		std::string logFilePath = std::string(argv[2]) + "_EccEdc.txt";
+		std::string logFilePath = std::string(argv[3]) + "_EccEdc.txt";
 
-		retVal = handleCheckOrFix(argv[2], execType
+		retVal = handleCheckOrFix(argv[3], execType, argv[2]
 			, check_fix_mode_s_startLBA, check_fix_mode_s_endLBA, TrackModeUnknown, logFilePath.c_str());
 	}
 #ifdef _WIN32
 	else if (execType == checkex) {
-		retVal = handleCheckEx(argv[2]);
+		retVal = handleCheckEx(argv[2], argv[2]);
 	}
 #endif
 	else if (execType == _write) {

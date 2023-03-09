@@ -14,7 +14,7 @@
  Start cmd.exe & run exe. for more information, run in no arg.
 
 ## Development Tool
- Visual Studio 2019 (Visual C++ 2019)
+ Visual Studio 2022 (Visual C++ 2022)
 
 ## License
  See LICENSE  
