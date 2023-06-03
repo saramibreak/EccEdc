@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef __linux__
+#if defined (__linux__) || defined (__MACH__)
 #define _snprintf    snprintf
 
 // from BaseTsd.h
@@ -530,11 +530,6 @@ typedef char            _TCHAR;
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
-#include <linux/cdrom.h>
-#include <linux/iso_fs.h>
-#include <linux/mmc/ioctl.h>
-#include <scsi/scsi.h>
-#include <scsi/sg.h>
 #include <wchar.h>
 #include <locale.h>
 #include <libgen.h>
