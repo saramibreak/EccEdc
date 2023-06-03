@@ -60,6 +60,9 @@
   <ImportGroup Label="Shared" />
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <TargetName>EccEdc</TargetName>
+  </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="EccEdc.cpp" />
     <ClCompile Include="_external\ecm.cpp" />
