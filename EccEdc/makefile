@@ -1,4 +1,4 @@
-TARGET := EccEdc_linux.out
+TARGET := EccEdc.out
 INCFLAGS := -I. -I_external -I_linux
 CFLAGS := -include _linux/defineForLinux.h
 CXXFLAGS := $(CFLAGS) -std=c++11
@@ -40,5 +40,12 @@ clean-objs:
 clean:
 	rm -f $(OBJECTS)
 	rm -f $(TARGET)
+
+ifeq ($(PREFIX),)
+    PREFIX := /usr/local
+endif
+
+install:
+	install -m 0755 $(TARGET) $(DESTDIR)$(PREFIX)/bin/$(TARGET)
 
 .PHONY: clean clean-objs
