@@ -1,75 +1,32 @@
 ==================================Change Log===================================
-*2014-04-11
-http://www.mediafire.com/?glwmoytaqo00e55/
-first release
+*2023-06-06
+added: support macOS
+changed: targetname for linux
 
-*2014-04-16
-http://www.mediafire.com/?74xxfl46ozbt1tz/
-fixed: detect mode 2
+*2023-03-09
+added: argument "Type"
+fixed: detecting SecuROM
+changed: Visual Studio 2022
 
-*2014-04-29
-http://www.mediafire.com/?j87e0amayhc2q7h/
-fixed: skip scrambled sector
+*2020-01-26
+changed: mode 2 logs
 
-*2014-05-21
-http://www.mediafire.com/?g2cbic87c48bqan/
-added: analyze header from [16] to [19]
+*2019-11-16
+added: support SecuROM mode 2 disc
+fixed: counter string of LBA
+fixed: bad msf handling
 
-*2014-12-17
-http://www.mediafire.com/?7ac64jer16sl7zi/
-added: For those corrupted sectors, replace everything except the sync and header fields with 0x55 bytes.
-added: checking of 0x814-0x81b per sector of mode 1 and 0x10-0x17 per sector of mode 2
-fixed: output message
+*2019-06-28
+fixed: bad msf
+deleted: some warning
 
-*2015-08-20
-http://www.mediafire.com/?ls3xlze3op452a5/
-added: start & end LBA to fix command
-fixed: some message
+*2019-03-03
+added: detecting ecc/edc is good but msf is bad sector
+added: detecting audio sector in data track
+fixed: looking on invalid mode as an error
 
-*2016-07-21
-updated: Visual Studio 2015 Update 2
-
-*2016-08-05
-updated: Visual Studio 2015 Update 3
-fixed: the init value of error count
-
-*2017-03-30
-merged: the code of branch
-refactoring: splitted the src, removed and disabled build warning
-added: some messages
-
-*2017-04-14
-added: read subchannel file (for reading the data sector definitely)
-
-*2017-04-30
-changed: Some log message
-changed: Split some code
-changed: Disabled SSE2 of vcxproj (for old CPU)
-
-*2017-07-02
-fixed: forgot FLAG DCP
-
-*2017-07-28
-added: print total errors
-added: check the reserved byte for unknown mode
-
-*2017-08-17
-fixed: invalid mode
-
-*2017-09-09
-changed: Some log messages
-
-*2017-10-10
-added: Write MSF
-added: Distinguish between zero sync and zero sync of the pregap sector
-
-*2018-05-22
-changed: Visual Studio 2015 to 2017
-changed: MultiThreaded to MultiThreadedDLL
-improved: mode 2 (for PS2 unlicensed disc)
-
-*2018-07-26
-added: Linux build
+*2018-10-20
+fixed: count of LBA
 
 *2018-09-15
 added: makefile for linux
@@ -77,27 +34,74 @@ added: support mode 0x00 of CD data track
 added: 4th sector from last of SecuROM is recognized as error
 changed: set to invalid mode except 0x00 or 0x01 or 0x02
 
-*2018-10-20
-fixed: count of LBA
+*2018-07-26
+added: Linux build
 
-*2019-03-03
-added: detecting ecc/edc is good but msf is bad sector
-added: detecting audio sector in data track
-fixed: looking on invalid mode as an error
+*2018-05-22
+changed: Visual Studio 2015 to 2017
+changed: MultiThreaded to MultiThreadedDLL
+improved: mode 2 (for PS2 unlicensed disc)
 
-*2019-06-28
-fixed: bad msf
-deleted: some warning
+*2017-10-10
+added: Write MSF
+added: Distinguish between zero sync and zero sync of the pregap sector
 
-*2019-11-16
-added: support SecuROM mode 2 disc
-fixed: counter string of LBA
-fixed: bad msf handling
+*2017-09-09
+changed: Some log messages
 
-*2020-01-26
-changed: mode 2 logs
+*2017-08-17
+fixed: invalid mode
 
-*2023-03-09
-added: argument "Type"
-fixed: detecting SecuROM
-changed: Visual Studio 2022
+*2017-07-28
+added: print total errors
+added: check the reserved byte for unknown mode
+
+*2017-07-02
+fixed: forgot FLAG DCP
+
+*2017-04-30
+changed: Some log message
+changed: Split some code
+changed: Disabled SSE2 of vcxproj (for old CPU)
+
+*2017-04-14
+added: read subchannel file (for reading the data sector definitely)
+
+*2017-03-30
+merged: the code of branch
+refactoring: splitted the src, removed and disabled build warning
+added: some messages
+
+*2016-08-05
+updated: Visual Studio 2015 Update 3
+fixed: the init value of error count
+
+*2016-07-21
+updated: Visual Studio 2015 Update 2
+
+*2015-08-20
+http://www.mediafire.com/?ls3xlze3op452a5/
+added: start & end LBA to fix command
+fixed: some message
+
+*2014-12-17
+http://www.mediafire.com/?7ac64jer16sl7zi/
+added: For those corrupted sectors, replace everything except the sync and header fields with 0x55 bytes.
+added: checking of 0x814-0x81b per sector of mode 1 and 0x10-0x17 per sector of mode 2
+fixed: output message
+
+*2014-05-21
+http://www.mediafire.com/?g2cbic87c48bqan/
+added: analyze header from [16] to [19]
+
+*2014-04-29
+http://www.mediafire.com/?j87e0amayhc2q7h/
+fixed: skip scrambled sector
+
+*2014-04-16
+http://www.mediafire.com/?74xxfl46ozbt1tz/
+fixed: detect mode 2
+
+*2014-04-11
+http://www.mediafire.com/?glwmoytaqo00e55/
+first release
