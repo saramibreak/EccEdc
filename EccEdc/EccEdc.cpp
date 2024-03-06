@@ -368,10 +368,14 @@ INT handleCheckDetail(
 	BYTE byCtl = (BYTE)((subBuf[12] >> 4) & 0x0f);
 	BYTE byIdx = subBuf[14];
 
-	if (sectorType == Mode0 || sectorType == InvalidMode0 || sectorType == Mode0NotAllZero) {
+	if (sectorType == Mode0 || sectorType == InvalidMode0 ||
+		sectorType == Mode0NotAllZero || sectorType == Mode0WithBlockIndicators) {
 		OutputFileWithLbaMsf("mode 0", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 		if (sectorType == Mode0) {
 			OutputFile("\n");
+		}
+		else if (sectorType == Mode0WithBlockIndicators) {
+			OutputFile(" with Block Indicators\n");
 		}
 		else if (sectorType == InvalidMode0) {
 			OutputFile(" Invalid mode: [%02x]\n", buf[15]);
@@ -382,11 +386,14 @@ INT handleCheckDetail(
 			pErrStruct->notAllZeroNum[pErrStruct->cnt_Mode0NotAllZero++] = roopCnt;
 		}
 	}
-	else if (sectorType == Mode1 || sectorType == InvalidMode1 ||
-		sectorType == Mode1BadEcc || sectorType == Mode1ReservedNotZero) {
+	else if (sectorType == Mode1 || sectorType == Mode1WithBlockIndicators ||
+		sectorType == InvalidMode1 || sectorType == Mode1BadEcc || sectorType == Mode1ReservedNotZero) {
 		OutputFileWithLbaMsf("mode 1", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 		if (sectorType == Mode1) {
 			OutputFile("\n");
+		}
+		else if (sectorType == Mode1WithBlockIndicators) {
+			OutputFile(" with Block Indicators\n");
 		}
 		else if (sectorType == InvalidMode1) {
 			OutputFile(" Invalid mode: [%02x]\n", buf[15]);
@@ -419,13 +426,16 @@ INT handleCheckDetail(
 	else if (sectorType == Mode2Form1 || sectorType == InvalidMode2Form1 ||
 		sectorType == Mode2Form2 || sectorType == InvalidMode2Form2 ||
 		sectorType == Mode2 || sectorType == InvalidMode2 ||
-		sectorType == Mode2Form1SubheaderNotSame ||
-		sectorType == Mode2Form2SubheaderNotSame || sectorType == Mode2SubheaderNotSame) {
+		sectorType == Mode2Form1SubheaderNotSame ||	sectorType == Mode2Form2SubheaderNotSame ||
+		sectorType == Mode2SubheaderNotSame || sectorType == Mode2WithBlockIndicators) {
 		BOOL bNoEdc = FALSE;
 
 		OutputFileWithLbaMsf("mode 2 ", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 		if (sectorType == Mode2Form1) {
 			OutputFile("form 1, ");
+		}
+		else if (sectorType == Mode2WithBlockIndicators) {
+			OutputFile(" with Block Indicators\n");
 		}
 		else if (sectorType == InvalidMode2Form1) {
 			OutputFile(" Invalid mode: [%02x]\n", buf[15]);

@@ -19,7 +19,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "ecm.h"
+#ifdef __linux__
 #pragma GCC diagnostic ignored "-Wconversion"
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -265,6 +267,9 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 					if (sector[0x00F] == 0x00) {
 						return Mode0; // Mode 0
 					}
+					else if (sector[0x00F] & 0xE0 && (sector[0x00F] & 0x1C) == 0 && (sector[0x00F] & 0x03) == 0) {
+						return Mode0WithBlockIndicators;
+					}
 					else {
 						return InvalidMode0;
 					}
@@ -286,6 +291,9 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 						//
 						if (sector[0x00F] == 0x01) {
 							return Mode1; // Mode 1
+						}
+						else if (sector[0x00F] & 0xE0 && (sector[0x00F] & 0x1C) == 0 && (sector[0x00F] & 0x03) == 0x01) {
+							return Mode1WithBlockIndicators;
 						}
 						else {
 							return InvalidMode1;
@@ -313,6 +321,9 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 						if (sector[0x00F] == 0x02) {
 							return Mode2Form1; // Mode 2, Form 1
 						}
+						else if (sector[0x00F] & 0xE0 && (sector[0x00F] & 0x1C) == 0 && (sector[0x00F] & 0x03) == 0x01) {
+							return Mode2WithBlockIndicators;
+						}
 						else {
 							return InvalidMode2Form1;
 						}
@@ -330,6 +341,9 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 						if (sector[0x00F] == 0x02) {
 							return Mode2Form2; // Mode 2, Form 2
 						}
+						else if (sector[0x00F] & 0xE0 && (sector[0x00F] & 0x1C) == 0 && (sector[0x00F] & 0x03) == 0x02) {
+							return Mode2WithBlockIndicators;
+						}
 						else {
 							return InvalidMode2Form2;
 						}
@@ -343,6 +357,9 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 						sector[0x12] == sector[0x16] && sector[0x13] == sector[0x17]) { // flags (4 bytes) versus redundant copy
 						if (sector[0x00F] == 0x02) {
 							return Mode2; // Mode 2, No EDC (for PlayStation)
+						}
+						else if (sector[0x00F] & 0xE0 && (sector[0x00F] & 0x1C) == 0 && (sector[0x00F] & 0x03) == 0x02) {
+							return Mode2WithBlockIndicators;
 						}
 						else {
 							return InvalidMode2;

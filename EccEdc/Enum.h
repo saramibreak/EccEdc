@@ -24,6 +24,9 @@ typedef enum _SectorType {
 	Mode2Form1 = 3,
 	Mode2Form2 = 4,
 	Mode2 = 5,
+	Mode0WithBlockIndicators = 6,
+	Mode1WithBlockIndicators = 7,
+	Mode2WithBlockIndicators = 8,
 	// Error or Warning
 	Mode0NotAllZero = -1,
 	Mode1BadEcc = -2,

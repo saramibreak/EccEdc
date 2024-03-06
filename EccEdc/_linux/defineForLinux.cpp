@@ -65,7 +65,7 @@ void _splitpath(const char* Path, char* Drive, char* Directory, char* Filename, 
 	if (Filename != NULL) {
 		// Filename is the part behind the last slahs
 		strcpy(Filename, CopyOfPath -= Rest);
-		strncpy(pExt, Filename, strlen(Filename));
+		strncpy(pExt, Filename, sizeof(ext) - 1);
 		PathRemoveExtension(Filename);
 	}
 	if (Extension != NULL) {
