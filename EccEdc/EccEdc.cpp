@@ -430,45 +430,45 @@ INT handleCheckDetail(
 		sectorType == Mode2SubheaderNotSame || sectorType == Mode2WithBlockIndicators) {
 		BOOL bNoEdc = FALSE;
 
-		OutputFileWithLbaMsf("mode 2 ", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
+		OutputFileWithLbaMsf("mode 2", roopCnt, roopCnt, buf[12], buf[13], buf[14]);
 		if (sectorType == Mode2Form1) {
-			OutputFile("form 1, ");
+			OutputFile(" form 1, ");
 		}
 		else if (sectorType == Mode2WithBlockIndicators) {
-			OutputFile(" with Block Indicators\n");
+			OutputFile(" with Block Indicators ");
 		}
 		else if (sectorType == InvalidMode2Form1) {
-			OutputFile(" Invalid mode: [%02x]\n", buf[15]);
+			OutputFile(" Invalid mode 2 form 1: [%02x] ", buf[15]);
 			pErrStruct->invalidModeNum[pErrStruct->cnt_InvalidMode++] = roopCnt;
 		}
 		else if (sectorType == Mode2Form2) {
-			OutputFile("form 2, ");
+			OutputFile(" form 2, ");
 		}
 		else if (sectorType == InvalidMode2Form2) {
-			OutputFile(" Invalid mode: [%02x]\n", buf[15]);
+			OutputFile(" Invalid mode 2 form 2: [%02x] ", buf[15]);
 			pErrStruct->invalidModeNum[pErrStruct->cnt_InvalidMode++] = roopCnt;
 		}
 		else if (sectorType == Mode2) {
-			OutputFile("no edc, ");
+			OutputFile(" no edc, ");
 			bNoEdc = TRUE;
 		}
 		else if (sectorType == InvalidMode2) {
-			OutputFile(" Invalid mode: [%02x]\n", buf[15]);
+			OutputFile(" Invalid mode 2: [%02x] ", buf[15]);
 			pErrStruct->invalidModeNum[pErrStruct->cnt_InvalidMode++] = roopCnt;
 		}
 		else if (sectorType == Mode2Form1SubheaderNotSame ||
 			sectorType == Mode2Form2SubheaderNotSame ||
 			sectorType == Mode2SubheaderNotSame) {
 			if (sectorType == Mode2Form1SubheaderNotSame) {
-				OutputFile("form 1, ");
+				OutputFile(" form 1, ");
 				pErrStruct->mode2Form1Num[pErrStruct->cnt_Mode2Form1SubheaderNotSame++] = roopCnt;
 			}
 			else if (sectorType == Mode2Form2SubheaderNotSame) {
-				OutputFile("form 2, ");
+				OutputFile(" form 2, ");
 				pErrStruct->mode2Form2Num[pErrStruct->cnt_Mode2Form2SubheaderNotSame++] = roopCnt;
 			}
 			else if (sectorType == Mode2SubheaderNotSame) {
-				OutputFile("no edc, ");
+				OutputFile(" no edc, ");
 				pErrStruct->mode2Num[pErrStruct->cnt_Mode2SubheaderNotSame++] = roopCnt;
 			}
 			OutputFile("Subheader isn't same."
