@@ -321,7 +321,7 @@ SectorType detect_sector(const uint8_t* sector, size_t size_available, TrackMode
 						if (sector[0x00F] == 0x02) {
 							return Mode2Form1; // Mode 2, Form 1
 						}
-						else if (sector[0x00F] & 0xE0 && (sector[0x00F] & 0x1C) == 0 && (sector[0x00F] & 0x03) == 0x01) {
+						else if (sector[0x00F] & 0xE0 && (sector[0x00F] & 0x1C) == 0 && (sector[0x00F] & 0x03) == 0x02) {
 							return Mode2WithBlockIndicators;
 						}
 						else {
