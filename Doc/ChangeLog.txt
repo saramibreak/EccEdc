@@ -1,4 +1,7 @@
 ==================================Change Log===================================
+*2024-04-01
+added: support block indicators of mode byte
+
 *2023-06-06
 added: support macOS
 changed: targetname for linux
