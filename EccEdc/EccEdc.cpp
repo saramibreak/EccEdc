@@ -755,6 +755,8 @@ INT handleCheckOrFix(
 	INT nTrkIdx = 0;
 	UINT n1stLBAinToc[100] = {};
 	UCHAR nCtlinToc[100] = {};
+	BOOL bSecuROM = FALSE;
+	UINT nSecuROMSector = 0;
 
 	if (!strncmp(pszType, "TOC", 3)) {
 		if (fread(&tocbuf, sizeof(BYTE), sizeof(tocbuf), fpCheckFile) < sizeof(tocbuf)) {
@@ -852,7 +854,7 @@ INT handleCheckOrFix(
 		prevMode[2] = prevMode[1];
 		prevMode[1] = prevMode[0];
 		prevMode[0] = buf[15];
-		BOOL bSecuROM = FALSE;
+		
 		UINT tmplba = 0;
 		if (i == roopSize - 1) {
 			// last sector
@@ -870,7 +872,7 @@ INT handleCheckOrFix(
 			}
 		}
 		if (bSecuROM) {
-			errStruct.invalidModeNum[errStruct.cnt_InvalidMode++] = tmplba;
+			nSecuROMSector = tmplba;
 		}
 		prevCtl = byCtl;
 
@@ -973,6 +975,11 @@ INT handleCheckOrFix(
 		}
 		OutputFile("\n");
 #endif
+	}
+
+	if (bSecuROM) {
+		OutputLog(standardOut | file,
+			"[INFO] Detected SecuROM sector (mode changed): %d\n", nSecuROMSector);
 	}
 
 	if (errStruct.cnt_Mode2Form1SubheaderNotSame) {
