@@ -1,4 +1,7 @@
 ==================================Change Log===================================
+*2024-09-01
+changed: 4th sector of the last of SecuROM is not error
+
 *2024-04-01
 added: support block indicators of mode byte
 
