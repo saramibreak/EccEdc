@@ -759,7 +759,7 @@ INT handleCheckOrFix(
 	UINT nSecuROMSector = 0;
 
 	if (!strncmp(pszType, "TOC", 3)) {
-		if (fread(&tocbuf, sizeof(BYTE), sizeof(tocbuf), fpCheckFile) < sizeof(tocbuf)) {
+		if (!fpCheckFile || fread(&tocbuf, sizeof(BYTE), sizeof(tocbuf), fpCheckFile) < sizeof(tocbuf)) {
 			OutputErrorString("Failed to read [F:%s][L:%d]\n", __FUNCTION__, __LINE__);
 			return EXIT_FAILURE;
 		}
