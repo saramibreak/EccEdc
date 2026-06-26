@@ -15,11 +15,8 @@ src_files = files(
   'EccEdc/_external/ecm.h',
   'EccEdc/FileUtils.cpp',
   'EccEdc/FileUtils.hpp',
-  'EccEdc/stdafx.cpp',
-  'EccEdc/stdafx.h',
   'EccEdc/StringUtils.cpp',
   'EccEdc/StringUtils.hpp',
-  'EccEdc/targetver.h',
   # EccEdc
   'EccEdc/Enum.h',
   'EccEdc/EccEdc.cpp',
